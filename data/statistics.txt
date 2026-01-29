@@ -1,0 +1,124 @@
+DATASET STATISTICS
+==================
+
+Total Samples: 27,700+ (after augmentation)
+Total Classes: 40
+Class Distribution: Imbalanced (ISL >> Malayalam)
+
+TRAIN/VAL/TEST SPLIT (70/15/15)
+================================
+Training Set:   19,390 samples (70%)
+Validation Set:  4,155 samples (15%)
+Test Set:        4,155 samples (15%)
+
+MALAYALAM SIGN LANGUAGE
+=======================
+
+Static Signs (Classes 0-6):
+---------------------------
+Class 0 (അ): ~300 samples (with augmentation)
+Class 1 (ആ): ~300 samples (with augmentation)
+Class 2 (ഇ): ~300 samples (with augmentation)
+Class 3 (ഈ): ~300 samples (with augmentation)
+Class 4 (ഉ): ~300 samples (with augmentation)
+Class 5 (ഏ): ~300 samples (with augmentation)
+Class 6 (ഐ): ~300 samples (with augmentation)
+Total: ~2,100 samples
+
+Dynamic Signs (Classes 7-14):
+-----------------------------
+Class 7 (ഒ):  ~75 samples (heavily augmented)
+Class 8 (ഓ):  ~75 samples (heavily augmented)
+Class 9 (ഔ):  ~75 samples (heavily augmented)
+Class 10 (ക): ~75 samples (heavily augmented)
+Class 11 (ഖ): ~75 samples (heavily augmented)
+Class 12 (ഗ): ~75 samples (heavily augmented)
+Class 13 (ഘ): ~75 samples (heavily augmented)
+Class 14 (ങ): ~75 samples (heavily augmented)
+Total: ~600 samples
+
+Malayalam Total: ~2,700 samples
+
+INDIAN SIGN LANGUAGE (Classes 15-39)
+=====================================
+25 alphabets (A-Z excluding R)
+Each class: ~1,000 samples (with POV flip)
+Total: ~25,000 samples
+
+FEATURE DIMENSIONS
+==================
+Input Shape: (max_seq_len, feature_dim) = (60, 126)
+- max_seq_len: 60 frames (static signs use only first frame)
+- feature_dim: 126 (2 hands × 21 landmarks × 3 coordinates)
+
+Coordinate Structure:
+- Hand 1: Landmarks 0-20 (63 features: x, y, z for each)
+- Hand 2: Landmarks 0-20 (63 features: x, y, z for each)
+
+AUGMENTATION SUMMARY
+====================
+
+Malayalam Static (0-6):
+- Original: ~150 samples per class
+- Techniques: POV horizontal flip
+- Augmented: ~300 samples per class
+
+Malayalam Dynamic (7-14):
+- Original: ~5-10 valid samples per class
+- Techniques: All 6 (noise, scale, translate, rotate, flip, temporal)
+- Augmented: ~75 samples per class
+- Note: 96% of original samples fail MediaPipe extraction
+
+ISL (15-39):
+- Original: ~500 samples per class
+- Techniques: POV horizontal flip
+- Augmented: ~1,000 samples per class
+
+DATA QUALITY METRICS
+====================
+- Valid samples (no NaN/Inf): 100% (after filtering)
+- Coordinate range: [0.0, 1.0] (normalized)
+- Sequence length: 1-60 frames (padded to 60)
+- Hand detection rate: 
+  * Malayalam Static: ~95%
+  * Malayalam Dynamic: ~4% (original), 100% (augmented)
+  * ISL: 100% (pre-processed)
+
+DATASET BALANCE
+===============
+Class Weight Ratios (for loss weighting):
+- ISL classes: ~1.0x (baseline)
+- Malayalam Static: ~8.3x
+- Malayalam Dynamic: ~33x
+
+This ensures the model learns Malayalam signs despite fewer samples.
+
+FILE FORMAT
+===========
+Processed features: .npy files
+- Naming: class_{idx}_sample_{num}.npy
+- Shape: (60, 126) for all samples
+- Dtype: float32
+- Size: ~30KB per file
+
+CSV Splits:
+- Columns: sample_id, class_idx, class_name, file_path, seq_length
+- Format: UTF-8 encoded
+- Total files: train_split.csv, val_split.csv, test_split.csv
+
+DISK STORAGE
+============
+Raw datasets: ~2-3 GB
+Processed features: ~800 MB
+Model checkpoints: ~13 MB
+Results/visualizations: ~10 MB
+Total: ~3-4 GB
+
+PREPROCESSING TIME
+==================
+MediaPipe extraction: ~30-45 minutes
+Augmentation: ~15-20 minutes
+Total: ~45-65 minutes (CPU)
+With GPU: ~20-30 minutes
+
+Last Updated: January 27, 2026

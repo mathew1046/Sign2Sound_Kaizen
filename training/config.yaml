@@ -1,0 +1,106 @@
+# Training Configuration for Sign Language Recognition
+
+# Model Configuration
+model:
+  name: "BiLSTM"
+  input_size: 126          # Feature dimension (2 hands × 21 landmarks × 3 coords)
+  hidden_size: 256         # LSTM hidden units per direction
+  num_layers: 2            # Number of LSTM layers
+  num_classes: 25          # ISL classes (A-Z excluding R)
+  dropout: 0.3             # Dropout rate
+  bidirectional: true      # Use bidirectional LSTM
+  max_seq_len: 60          # Maximum sequence length
+
+# Training Hyperparameters
+training:
+  epochs: 10               # Maximum training epochs
+  batch_size: 128           # Batch size (adjust for GPU memory)
+  learning_rate: 0.001     # Initial learning rate
+  weight_decay: 0.0001     # L2 regularization
+  optimizer: "AdamW"       # Optimizer (AdamW, Adam, SGD)
+  
+  # Gradient clipping
+  gradient_clip: 1.0       # Max gradient norm
+  
+  # Loss function
+  loss_type: "ctc" # Options: weighted_ce, focal, label_smoothing, ce
+  use_class_weights: false  # Use class weighting for imbalance (not used with CTC)
+  
+  # Mixed precision training (faster on modern GPUs)
+  use_amp: false           # Automatic Mixed Precision
+  
+  # Validation
+  val_every: 1             # Validate every N epochs
+  
+# Learning Rate Scheduler
+scheduler:
+  type: "ReduceLROnPlateau"  # Options: ReduceLROnPlateau, StepLR, CosineAnnealingLR
+  mode: "min"              # 'min' for loss, 'max' for accuracy
+  factor: 0.5              # Multiply LR by this factor
+  patience: 5              # Epochs to wait before reducing LR
+  min_lr: 0.000001         # Minimum learning rate
+  verbose: true            # Print LR changes
+
+# Early Stopping
+early_stopping:
+  enabled: true            # Enable early stopping
+  patience: 2              # Stop if no improvement for N epochs
+  min_delta: 0.001         # Minimum change to qualify as improvement
+  monitor: "val_loss"      # Metric to monitor (val_loss or val_acc)
+
+# Data Loading
+data:
+  train_csv: "data/processed/train_split.csv"
+  val_csv: "data/processed/val_split.csv"
+  test_csv: "data/processed/test_split.csv"
+  num_workers: 2           # DataLoader workers
+  pin_memory: true         # Pin memory for faster transfer to GPU
+  persistent_workers: true # Keep workers alive
+  prefetch_factor: 2       # Prefetch batches per worker
+  shuffle_train: true      # Shuffle training data
+  drop_last: false         # Drop last incomplete batch
+
+# Checkpointing
+checkpointing:
+  save_dir: "checkpoints"  # Directory to save checkpoints
+  save_interval: 5         # Save checkpoint every N epochs
+  save_best: true          # Save best model based on validation
+  save_final: true         # Save final model after training
+  keep_last_n: 3           # Keep only last N periodic checkpoints
+
+# Logging
+logging:
+  log_dir: "results"       # Directory for logs and results
+  log_interval: 10         # Log training metrics every N batches
+  save_metrics: true       # Save training metrics to JSON
+  tensorboard: false       # Use TensorBoard (requires tensorboard package)
+
+# Device Configuration
+device: "cuda"             # Device: 'cuda' or 'cpu' (auto-detect if not specified)
+seed: 42                   # Random seed for reproducibility
+
+# Augmentation (during training)
+augmentation:
+  enabled: false           # Enable on-the-fly augmentation (already done in preprocessing)
+  horizontal_flip_prob: 0.0
+  gaussian_noise_prob: 0.0
+
+# Evaluation
+evaluation:
+  metrics:
+    - "accuracy"           # Overall accuracy
+    - "precision"          # Precision (macro average)
+    - "recall"             # Recall (macro average)
+    - "f1"                 # F1-score (macro average)
+  save_confusion_matrix: true
+  save_per_class_metrics: true
+  save_predictions: false  # Save all predictions (large file)
+
+# Experiment Tracking
+experiment:
+  name: "bilstm_isl"  # Experiment name
+  notes: "BiLSTM model for ISL (Indian Sign Language) recognition with class weighting"
+  tags:
+    - "bilstm"
+    - "sign-language"
+    - "isl"
