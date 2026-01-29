@@ -29,7 +29,6 @@ from models.model import load_model
 from features.hand_landmarks import HandLandmarkDetector
 from features.feature_utils import pad_or_truncate
 from inference.utils import load_class_mapping
-from inference.feature_processing import normalize_landmarks_wrist_relative, LandmarkSmoother
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -38,13 +37,17 @@ logger = logging.getLogger(__name__)
 class SignLanguagePredictor:
     """Predict sign language from images."""
     
-    # Complete class mapping: class_index -> letter
+    # Complete class mapping: class_index -> letter/character
     DEFAULT_CLASS_MAPPING = {
-        # ISL (0-24) - A-Z excluding R
-        0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G', 
-        7: 'H', 8: 'I', 9: 'J', 10: 'K', 11: 'L', 12: 'M', 13: 'N', 
-        14: 'O', 15: 'P', 16: 'Q', 17: 'S', 18: 'T', 19: 'U', 20: 'V', 
-        21: 'W', 22: 'X', 23: 'Y', 24: 'Z'
+        # Malayalam Static (0-6)
+        0: 'അ', 1: 'ആ', 2: 'ഇ', 3: 'ഈ', 4: 'ഉ', 5: 'ഏ', 6: 'ഐ',
+        # Malayalam Dynamic (7-14)
+        7: 'ഒ', 8: 'ഓ', 9: 'ഔ', 10: 'ക', 11: 'ഖ', 12: 'ഗ', 13: 'ഘ', 14: 'ങ',
+        # ISL (15-39) - A-Z excluding R
+        15: 'A', 16: 'B', 17: 'C', 18: 'D', 19: 'E', 20: 'F', 21: 'G', 
+        22: 'H', 23: 'I', 24: 'J', 25: 'K', 26: 'L', 27: 'M', 28: 'N', 
+        29: 'O', 30: 'P', 31: 'Q', 32: 'S', 33: 'T', 34: 'U', 35: 'V', 
+        36: 'W', 37: 'X', 38: 'Y', 39: 'Z'
     }
     
     def __init__(self, model_path: str, device: str = None):
@@ -68,10 +71,12 @@ class SignLanguagePredictor:
         loaded_mapping = load_class_mapping(str(csv_path))
         
         if loaded_mapping:
-            # Extract just the letter from "ISL_X" format
+            # Extract just the character from "Malayalam_X" or "ISL_X" format
             self.class_mapping = {}
             for idx, name in loaded_mapping.items():
-                if name.startswith('ISL_'):
+                if name.startswith('Malayalam_'):
+                    self.class_mapping[idx] = name.replace('Malayalam_', '')
+                elif name.startswith('ISL_'):
                     self.class_mapping[idx] = name.replace('ISL_', '')
                 else:
                     self.class_mapping[idx] = name
@@ -89,9 +94,6 @@ class SignLanguagePredictor:
             min_tracking_confidence=0.3
         )
         
-        # Initialize landmark smoother for jitter reduction
-        self.smoother = LandmarkSmoother(min_cutoff=1.0, beta=0.007)
-        
         logger.info(f"Predictor initialized on {self.device}")
     
     def predict_image(self, image_path: str) -> Tuple[int, float, str]:
@@ -104,55 +106,33 @@ class SignLanguagePredictor:
         Returns:
             Tuple of (class_id, confidence, class_name)
         """
-        try:
-            # Load image
-            image = cv2.imread(str(image_path))
-            if image is None:
-                logger.error(f"Failed to load image: {image_path}")
-                return None, 0.0, "ERROR"
-            
-            # Extract features
-            features = self.extractor.process_image(image)
-            if features is None:
-                logger.warning(f"No hand landmarks detected in {image_path}")
-                return None, 0.0, "NO_HANDS"
-            
-            # Apply preprocessing pipeline
-            # 1. Normalize to wrist-relative coordinates
-            features = normalize_landmarks_wrist_relative(features)
-            
-            # 2. Apply smoothing to reduce jitter
-            features = self.smoother.smooth(features)
-            
-            # 3. Pad/truncate to max sequence length
-            features = pad_or_truncate(features, max_len=60)
-            
-            # Prepare input for model
-            features_tensor = torch.from_numpy(features).float().unsqueeze(0).to(self.device)
-            seq_length = torch.tensor([1]).to(self.device)
-            
-            # Predict
-            with torch.no_grad():
-                logits = self.model(features_tensor, seq_length)
-                
-                # Handle both model types
-                # CTC model outputs (seq_len, batch, classes)
-                # Standard model outputs (batch, classes)
-                if logits.dim() == 3:  # CTC output: (T, B, C)
-                    # Use mean across timesteps for prediction
-                    logits = logits.mean(dim=0)  # (B, C)
-                
-                probs = torch.softmax(logits, dim=1)
-                class_id = torch.argmax(logits, dim=1).item()
-                confidence = probs[0, class_id].item()
-            
-            class_name = self.class_mapping.get(class_id, f"Class_{class_id}")
-            
-            return class_id, confidence, class_name
-        
-        except Exception as e:
-            logger.error(f"Error processing image {image_path}: {str(e)}")
+        # Load image
+        image = cv2.imread(str(image_path))
+        if image is None:
+            logger.error(f"Failed to load image: {image_path}")
             return None, 0.0, "ERROR"
+        
+        # Extract features
+        features = self.extractor.process_image(image)
+        if features is None:
+            logger.warning(f"Failed to extract features from {image_path}")
+            return None, 0.0, "NO_HANDS"
+        
+        # Prepare input
+        features = pad_or_truncate(features, max_len=60)
+        features_tensor = torch.from_numpy(features).float().unsqueeze(0).to(self.device)
+        seq_length = torch.tensor([1]).to(self.device)
+        
+        # Predict
+        with torch.no_grad():
+            logits = self.model(features_tensor, seq_length)
+            probs = torch.softmax(logits, dim=1)
+            class_id = torch.argmax(logits, dim=1).item()
+            confidence = probs[0, class_id].item()
+        
+        class_name = self.class_mapping.get(class_id, f"Class_{class_id}")
+        
+        return class_id, confidence, class_name
     
     def predict_batch(self, image_paths: List[str], confidence_threshold: float = 0.0) -> List[Dict]:
         """
@@ -243,14 +223,11 @@ def main():
     logger.info("PREDICTIONS")
     logger.info("="*60)
     
-    if not results:
-        logger.info("No predictions with sufficient confidence.")
-    else:
-        for result in results:
-            logger.info(f"Image: {result['image']}")
-            logger.info(f"  Prediction: {result['class_name']}")
-            logger.info(f"  Confidence: {result['confidence']*100:.2f}%")
-            logger.info("")
+    for result in results:
+        logger.info(f"Image: {result['image']}")
+        logger.info(f"  Prediction: {result['class_name']}")
+        logger.info(f"  Confidence: {result['confidence']*100:.2f}%")
+        logger.info()
     
     # Save results if requested
     if args.output:
