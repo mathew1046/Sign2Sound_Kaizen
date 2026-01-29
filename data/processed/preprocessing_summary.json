@@ -1,0 +1,136 @@
+{
+  "total_samples": 169392,
+  "num_classes": 25,
+  "train_samples": 118574,
+  "val_samples": 25409,
+  "test_samples": 25409,
+  "feature_dim": 126,
+  "max_seq_len": 60,
+  "class_distribution": {
+    "ISL_A": {
+      "train": 4647,
+      "val": 996,
+      "test": 995
+    },
+    "ISL_B": {
+      "train": 4722,
+      "val": 1012,
+      "test": 1012
+    },
+    "ISL_C": {
+      "train": 4680,
+      "val": 1003,
+      "test": 1003
+    },
+    "ISL_D": {
+      "train": 4689,
+      "val": 1004,
+      "test": 1005
+    },
+    "ISL_E": {
+      "train": 4743,
+      "val": 1016,
+      "test": 1017
+    },
+    "ISL_F": {
+      "train": 4799,
+      "val": 1028,
+      "test": 1029
+    },
+    "ISL_G": {
+      "train": 4724,
+      "val": 1012,
+      "test": 1012
+    },
+    "ISL_H": {
+      "train": 4733,
+      "val": 1014,
+      "test": 1015
+    },
+    "ISL_I": {
+      "train": 4757,
+      "val": 1019,
+      "test": 1020
+    },
+    "ISL_J": {
+      "train": 4851,
+      "val": 1040,
+      "test": 1039
+    },
+    "ISL_K": {
+      "train": 4844,
+      "val": 1038,
+      "test": 1038
+    },
+    "ISL_L": {
+      "train": 4567,
+      "val": 979,
+      "test": 978
+    },
+    "ISL_M": {
+      "train": 4842,
+      "val": 1038,
+      "test": 1038
+    },
+    "ISL_N": {
+      "train": 4833,
+      "val": 1035,
+      "test": 1036
+    },
+    "ISL_O": {
+      "train": 4634,
+      "val": 993,
+      "test": 993
+    },
+    "ISL_P": {
+      "train": 4855,
+      "val": 1040,
+      "test": 1041
+    },
+    "ISL_Q": {
+      "train": 4546,
+      "val": 974,
+      "test": 974
+    },
+    "ISL_S": {
+      "train": 4812,
+      "val": 1031,
+      "test": 1031
+    },
+    "ISL_T": {
+      "train": 4823,
+      "val": 1034,
+      "test": 1033
+    },
+    "ISL_U": {
+      "train": 4578,
+      "val": 981,
+      "test": 981
+    },
+    "ISL_V": {
+      "train": 4710,
+      "val": 1009,
+      "test": 1009
+    },
+    "ISL_W": {
+      "train": 4773,
+      "val": 1023,
+      "test": 1022
+    },
+    "ISL_X": {
+      "train": 4736,
+      "val": 1015,
+      "test": 1015
+    },
+    "ISL_Y": {
+      "train": 4863,
+      "val": 1043,
+      "test": 1042
+    },
+    "ISL_Z": {
+      "train": 4813,
+      "val": 1032,
+      "test": 1031
+    }
+  }
+}
