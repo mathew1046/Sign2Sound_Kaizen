@@ -6,15 +6,15 @@ model:
   input_size: 126          # Feature dimension (2 hands × 21 landmarks × 3 coords)
   hidden_size: 256         # LSTM hidden units per direction
   num_layers: 2            # Number of LSTM layers
-  num_classes: 25          # ISL classes (A-Z excluding R)
+  num_classes: 40          # Total classes (Malayalam + ISL)
   dropout: 0.3             # Dropout rate
   bidirectional: true      # Use bidirectional LSTM
   max_seq_len: 60          # Maximum sequence length
 
 # Training Hyperparameters
 training:
-  epochs: 10               # Maximum training epochs
-  batch_size: 128           # Batch size (adjust for GPU memory)
+  epochs: 30               # Maximum training epochs
+  batch_size: 64           # Batch size (adjust for GPU memory)
   learning_rate: 0.001     # Initial learning rate
   weight_decay: 0.0001     # L2 regularization
   optimizer: "AdamW"       # Optimizer (AdamW, Adam, SGD)
@@ -23,8 +23,8 @@ training:
   gradient_clip: 1.0       # Max gradient norm
   
   # Loss function
-  loss_type: "ctc" # Options: weighted_ce, focal, label_smoothing, ce
-  use_class_weights: false  # Use class weighting for imbalance (not used with CTC)
+  loss_type: "weighted_ce" # Options: weighted_ce, focal, label_smoothing, ce
+  use_class_weights: true  # Use class weighting for imbalance
   
   # Mixed precision training (faster on modern GPUs)
   use_amp: false           # Automatic Mixed Precision
@@ -44,7 +44,7 @@ scheduler:
 # Early Stopping
 early_stopping:
   enabled: true            # Enable early stopping
-  patience: 2              # Stop if no improvement for N epochs
+  patience: 7              # Stop if no improvement for N epochs
   min_delta: 0.001         # Minimum change to qualify as improvement
   monitor: "val_loss"      # Metric to monitor (val_loss or val_acc)
 
@@ -98,9 +98,10 @@ evaluation:
 
 # Experiment Tracking
 experiment:
-  name: "bilstm_isl"  # Experiment name
-  notes: "BiLSTM model for ISL (Indian Sign Language) recognition with class weighting"
+  name: "bilstm_malayalam_isl"  # Experiment name
+  notes: "BiLSTM model for Malayalam + ISL sign language recognition with class weighting"
   tags:
     - "bilstm"
     - "sign-language"
+    - "malayalam"
     - "isl"

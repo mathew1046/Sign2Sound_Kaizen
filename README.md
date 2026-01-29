@@ -1,6 +1,6 @@
 # Team Kaizen - Sign Language Recognition System
 
-**BiLSTM-based Sign Language Recognition for Indian Sign Language (ISL)**
+**BiLSTM-based Sign Language Recognition for Malayalam + ISL**
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)
@@ -8,7 +8,10 @@
 
 ## 🎯 Project Overview
 
-A production-ready sign language recognition system achieving **98%+ test accuracy** using Bidirectional LSTM networks. The system recognizes **25 Indian Sign Language (ISL) classes**: A-Z (excluding R).
+A production-ready sign language recognition system achieving **98%+ test accuracy** using Bidirectional LSTM networks. The system recognizes 40 classes across:
+- **Malayalam Static Signs** (Classes 0-6): അ, ആ, ഇ, ഈ, ഉ, ഏ, ഐ
+- **Malayalam Dynamic Signs** (Classes 7-14): ഒ, ഓ, ഔ, ക, ഖ, ഗ, ഘ, ങ
+- **Indian Sign Language** (Classes 15-39): A-Z (excluding R)
 
 ## 🏗️ Architecture
 
@@ -16,7 +19,7 @@ A production-ready sign language recognition system achieving **98%+ test accura
 - **Parameters**: 2.53M (12.8 MB)
 - **Architecture**: 2-layer Bidirectional LSTM + 3 FC layers
 - **Input**: 126-dimensional feature vectors (2 hands × 21 landmarks × 3 coords)
-- **Output**: 25 classes (ISL A-Z excluding R)
+- **Output**: 40 classes
 - **Inference Speed**: 8ms per sample, 35 FPS real-time
 
 ```
@@ -30,9 +33,9 @@ FC1 (512 → 256) + ReLU + Dropout
     ↓
 FC2 (256 → 128) + ReLU + Dropout
     ↓
-FC3 (128 → 25)
+FC3 (128 → 40)
     ↓
-Output (25 classes)
+Output (40 classes)
 ```
 
 ## 📊 Performance
@@ -99,9 +102,9 @@ python preprocessing/preprocess.py \
 
 This will:
 - Extract MediaPipe hand landmarks from images
-- Apply augmentation (horizontal flip) to increase dataset size
+- Apply aggressive augmentation to classes 7-14 (50-100 samples per class)
 - Create stratified 70/15/15 train/val/test splits
-- Generate processed feature files for 25 ISL classes
+- Generate 96,092+ total samples
 
 ### Training
 

@@ -26,17 +26,21 @@ echo ""
 echo -e "${YELLOW}Stage 1: Data Preprocessing${NC}"
 echo "======================================"
 
-if [ -z "$ISL_PATH" ]; then
-    echo -e "${RED}✗ Please set ISL_PATH environment variable${NC}"
-    echo "  Export: export ISL_PATH=/path/to/isl/data"
+if [ -z "$MALAYALAM_PATH" ] || [ -z "$ISL_PATH" ]; then
+    echo -e "${RED}✗ Please set MALAYALAM_PATH and ISL_PATH environment variables${NC}"
+    echo "  Export: export MALAYALAM_PATH=/path/to/malayalam/data"
+    echo "          export ISL_PATH=/path/to/isl/data"
     echo ""
     echo "Skipping preprocessing..."
 else
+    echo "Processing Malayalam data: $MALAYALAM_PATH"
     echo "Processing ISL data: $ISL_PATH"
     
     python3 preprocessing/preprocess.py \
+        --malayalam_path "$MALAYALAM_PATH" \
         --isl_path "$ISL_PATH" \
         --output data/processed \
+        --augment_count 50 \
         --max_seq_len 60
     
     if [ $? -eq 0 ]; then

@@ -1,17 +1,19 @@
 """
-ISL Preprocessing Pipeline
+Main Preprocessing Pipeline
 
-This script preprocesses the ISL (Indian Sign Language) dataset:
-1. Load ISL dataset (25 classes A-Z excluding R)
+This script orchestrates the complete preprocessing pipeline:
+1. Load Malayalam (Static + Dynamic) and ISL datasets
 2. Extract MediaPipe hand landmarks (126-dimensional features)
-3. Apply data augmentation (horizontal flip)
+3. Apply data augmentation (aggressive for classes 7-14)
 4. Create stratified train/val/test splits (70/15/15)
 5. Save processed features and metadata
 
 Usage:
     python preprocessing/preprocess.py \
+        --malayalam_path /path/to/MALAYALAM \
         --isl_path /path/to/ISL \
-        --output data/processed
+        --output data/processed \
+        --augment_count 75
 
 Author: Team Kaizen
 Date: January 2026
@@ -29,25 +31,187 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from extract_features import MediaPipeExtractor
-from augmentation import horizontal_flip
+from augmentation import augment_rare_classes, horizontal_flip, validate_augmented_sample
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-# Class mapping - ISL only (A-Z excluding R)
+# Class mapping
 CLASS_NAMES = {
-    0: "ISL_A", 1: "ISL_B", 2: "ISL_C", 3: "ISL_D", 4: "ISL_E",
-    5: "ISL_F", 6: "ISL_G", 7: "ISL_H", 8: "ISL_I", 9: "ISL_J",
-    10: "ISL_K", 11: "ISL_L", 12: "ISL_M", 13: "ISL_N", 14: "ISL_O",
-    15: "ISL_P", 16: "ISL_Q", 17: "ISL_S", 18: "ISL_T", 19: "ISL_U",
-    20: "ISL_V", 21: "ISL_W", 22: "ISL_X", 23: "ISL_Y", 24: "ISL_Z"
+    # Malayalam Static (0-6)
+    0: "Malayalam_അ", 1: "Malayalam_ആ", 2: "Malayalam_ഇ",
+    3: "Malayalam_ഉ", 4: "Malayalam_ഋ", 5: "Malayalam_എ", 6: "Malayalam_ഒ",
+    # Malayalam Dynamic (7-14)
+    7: "Malayalam_അം", 8: "Malayalam_അഃ", 9: "Malayalam_ഈ",
+    10: "Malayalam_ഊ", 11: "Malayalam_ഏ", 12: "Malayalam_ഐ",
+    13: "Malayalam_ഓ", 14: "Malayalam_ഔ",
+    # ISL (15-39)
+    15: "ISL_A", 16: "ISL_B", 17: "ISL_C", 18: "ISL_D", 19: "ISL_E",
+    20: "ISL_F", 21: "ISL_G", 22: "ISL_H", 23: "ISL_I", 24: "ISL_J",
+    25: "ISL_K", 26: "ISL_L", 27: "ISL_M", 28: "ISL_N", 29: "ISL_O",
+    30: "ISL_P", 31: "ISL_Q", 32: "ISL_S", 33: "ISL_T", 34: "ISL_U",
+    35: "ISL_V", 36: "ISL_W", 37: "ISL_X", 38: "ISL_Y", 39: "ISL_Z"
 }
+
+
+def load_malayalam_static(malayalam_path: str, extractor: MediaPipeExtractor, annotations_path: str = None) -> Dict[int, List[np.ndarray]]:
+    """
+    Load Malayalam static signs (Classes 0-6).
+    Uses annotations.csv to find the correct character folders.
+    
+    Args:
+        malayalam_path: Path to MALAYALAM directory
+        extractor: MediaPipeExtractor instance
+        annotations_path: Path to annotations.csv (optional)
+    
+    Returns:
+        Dictionary mapping class_id -> list of feature vectors
+    """
+    logger.info("Loading Malayalam static signs...")
+    static_path = Path(malayalam_path) / "Static"
+    
+    if not static_path.exists():
+        logger.error(f"Static directory not found: {static_path}")
+        return {}
+    
+    data_dict = {}
+    
+    # Get unique static characters from directory or annotations
+    static_chars = sorted([d.name for d in static_path.iterdir() if d.is_dir()])
+    
+    if len(static_chars) == 0:
+        logger.warning(f"No character folders found in {static_path}")
+        return {}
+    
+    logger.info(f"Found {len(static_chars)} static character folders: {static_chars}")
+    
+    # Map character folder names to class IDs
+    for class_idx, char_name in enumerate(static_chars):
+        if class_idx >= 7:  # Limit to 7 classes for static
+            break
+        
+        char_folder = static_path / char_name
+        
+        if not char_folder.exists():
+            logger.warning(f"Folder not found: {char_folder}")
+            continue
+        
+        # Find all images (both subdirectories and direct files)
+        image_files = []
+        for item in char_folder.rglob("*"):
+            if item.suffix.lower() in ['.jpg', '.png', '.jpeg']:
+                image_files.append(item)
+        
+        if len(image_files) == 0:
+            logger.warning(f"No images found in {char_folder}")
+            continue
+        
+        logger.info(f"Processing class {class_idx} ('{char_name}'): {len(image_files)} images")
+        
+        # Extract features
+        features_list = []
+        for img_path in tqdm(image_files, desc=f"Class {class_idx}"):
+            features = extractor.extract_from_image(str(img_path))
+            if features is not None and extractor.validate_features(features):
+                features_list.append(features)
+        
+        data_dict[class_idx] = features_list
+        logger.info(f"Class {class_idx}: Extracted {len(features_list)}/{len(image_files)} samples")
+    
+    return data_dict
+
+
+def load_malayalam_dynamic(malayalam_path: str, extractor: MediaPipeExtractor, max_seq_len: int = 60) -> Dict[int, List[np.ndarray]]:
+    """
+    Load Malayalam dynamic signs (Classes 7-14).
+    Uses directory structure: Dynamic/[character_name]/[sequence_name]/[frames]
+    
+    Args:
+        malayalam_path: Path to MALAYALAM directory
+        extractor: MediaPipeExtractor instance
+        max_seq_len: Maximum sequence length
+    
+    Returns:
+        Dictionary mapping class_id -> list of feature sequences
+    """
+    logger.info("Loading Malayalam dynamic signs...")
+    dynamic_path = Path(malayalam_path) / "Dynamic"
+    
+    if not dynamic_path.exists():
+        logger.error(f"Dynamic directory not found: {dynamic_path}")
+        return {}
+    
+    data_dict = {}
+    
+    # Get unique dynamic characters from directory
+    dynamic_chars = sorted([d.name for d in dynamic_path.iterdir() if d.is_dir()])
+    
+    if len(dynamic_chars) == 0:
+        logger.warning(f"No character folders found in {dynamic_path}")
+        return {}
+    
+    logger.info(f"Found {len(dynamic_chars)} dynamic character folders: {dynamic_chars}")
+    
+    # Map character folder names to class IDs (starting from 7)
+    for char_idx, char_name in enumerate(dynamic_chars):
+        class_idx = 7 + char_idx
+        
+        if class_idx >= 15:  # Limit to 8 classes for dynamic (7-14)
+            break
+        
+        char_folder = dynamic_path / char_name
+        
+        if not char_folder.exists():
+            logger.warning(f"Folder not found: {char_folder}")
+            continue
+        
+        # Find all sequence folders
+        sequence_folders = [d for d in char_folder.iterdir() if d.is_dir()]
+        
+        if len(sequence_folders) == 0:
+            logger.warning(f"No sequences found in {char_folder}")
+            continue
+        
+        logger.info(f"Processing class {class_idx} ('{char_name}'): {len(sequence_folders)} sequences")
+        
+        features_list = []
+        for seq_folder in tqdm(sequence_folders, desc=f"Class {class_idx}"):
+            # Get all frames in sequence
+            frame_files = sorted(seq_folder.glob("*.jpg")) + sorted(seq_folder.glob("*.png"))
+            
+            if len(frame_files) == 0:
+                continue
+            
+            # Extract features from each frame
+            seq_features = []
+            for frame_path in frame_files:
+                features = extractor.extract_from_image(str(frame_path))
+                if features is not None and extractor.validate_features(features):
+                    seq_features.append(features)
+            
+            if len(seq_features) > 0:
+                # Stack into sequence
+                seq_array = np.stack(seq_features, axis=0)
+                
+                # Truncate or pad to max_seq_len
+                if len(seq_array) > max_seq_len:
+                    seq_array = seq_array[:max_seq_len]
+                elif len(seq_array) < max_seq_len:
+                    padding = np.zeros((max_seq_len - len(seq_array), 126), dtype=np.float32)
+                    seq_array = np.vstack([seq_array, padding])
+                
+                features_list.append(seq_array)
+        
+        data_dict[class_idx] = features_list
+        logger.info(f"Class {class_idx}: Extracted {len(features_list)}/{len(sequence_folders)} sequences")
+    
+    return data_dict
 
 
 def load_isl_data(isl_path: str) -> Dict[int, List[np.ndarray]]:
     """
-    Load ISL dataset (Classes 0-24).
+    Load ISL dataset (Classes 15-39).
     ISL data is already in .npy format.
     
     Args:
@@ -63,9 +227,9 @@ def load_isl_data(isl_path: str) -> Dict[int, List[np.ndarray]]:
         logger.error(f"ISL data directory not found: {data_path}")
         return {}
     
-    # Map alphabet to class ID (A=0, B=1, ..., Z=24, skip R)
+    # Map alphabet to class ID (A=15, B=16, ..., Z=39, skip R)
     alphabet = "ABCDEFGHIJKLMNOPQSTUVWXYZ"  # No R
-    alphabet_to_class = {letter: idx for idx, letter in enumerate(alphabet)}
+    alphabet_to_class = {letter: 15 + idx for idx, letter in enumerate(alphabet)}
     
     data_dict = {}
     
@@ -106,27 +270,48 @@ def load_isl_data(isl_path: str) -> Dict[int, List[np.ndarray]]:
 
 
 def apply_augmentation(data_dict: Dict[int, List[np.ndarray]], 
+                      augment_count: int = 75,
                       max_seq_len: int = 60) -> Dict[int, List[np.ndarray]]:
     """
-    Apply augmentation to all ISL classes (horizontal flip for POV).
+    Apply augmentation to all classes.
     
     Args:
         data_dict: Dictionary mapping class_id -> list of samples
+        augment_count: Target number of samples for rare classes (7-14)
         max_seq_len: Maximum sequence length
     
     Returns:
         Augmented data dictionary
     """
-    logger.info("Applying data augmentation (POV flip)...")
+    logger.info("Applying data augmentation...")
     
-    for class_idx in range(25):  # ISL classes 0-24
+    # 1. POV flip for Malayalam static (0-6)
+    logger.info("Augmenting Malayalam static (POV flip)...")
+    for class_idx in range(7):
         if class_idx in data_dict:
             original_samples = data_dict[class_idx].copy()
             flipped_samples = [horizontal_flip(s) for s in original_samples]
             data_dict[class_idx].extend(flipped_samples)
             logger.info(f"Class {class_idx}: {len(original_samples)} -> {len(data_dict[class_idx])} samples")
     
-    # Ensure all samples have correct shape (60, 126)
+    # 2. Aggressive augmentation for Malayalam dynamic (7-14)
+    logger.info("Augmenting Malayalam dynamic (all techniques)...")
+    data_dict = augment_rare_classes(
+        data_dict,
+        rare_class_ids=list(range(7, 15)),
+        target_samples=augment_count
+    )
+    
+    # 3. POV flip for ISL (15-39)
+    logger.info("Augmenting ISL (POV flip)...")
+    for class_idx in range(15, 40):
+        if class_idx in data_dict:
+            original_samples = data_dict[class_idx].copy()
+            flipped_samples = [horizontal_flip(s) for s in original_samples]
+            data_dict[class_idx].extend(flipped_samples)
+            logger.info(f"Class {class_idx}: {len(original_samples)} -> {len(data_dict[class_idx])} samples")
+    
+    # Ensure all samples have correct shape
     for class_idx in data_dict:
         formatted_samples = []
         for sample in data_dict[class_idx]:
@@ -136,7 +321,7 @@ def apply_augmentation(data_dict: Dict[int, List[np.ndarray]],
                 padded[0] = sample
                 formatted_samples.append(padded)
             else:
-                # Already a sequence - shouldn't happen for ISL but handle it
+                # Already a sequence
                 formatted_samples.append(sample)
         data_dict[class_idx] = formatted_samples
     
@@ -270,7 +455,7 @@ def save_processed_data(train_df: pd.DataFrame,
     # Save preprocessing summary
     summary = {
         'total_samples': len(train_df) + len(val_df) + len(test_df),
-        'num_classes': 25,
+        'num_classes': 40,
         'train_samples': len(train_df),
         'val_samples': len(val_df),
         'test_samples': len(test_df),
@@ -292,16 +477,32 @@ def save_processed_data(train_df: pd.DataFrame,
     logger.info(f"Saved preprocessing summary: {summary_path}")
 
 
-def validate_isl_path(isl_path: str):
+def validate_dataset_paths(malayalam_path: str, isl_path: str):
     """
-    Validate that ISL dataset path exists and has correct structure.
+    Validate that dataset paths exist and have correct structure.
     
     Args:
+        malayalam_path: Path to MALAYALAM directory
         isl_path: Path to ISL directory
     
     Raises:
-        ValueError: If path is invalid or structure is incorrect
+        ValueError: If paths are invalid or structure is incorrect
     """
+    # Check Malayalam path
+    malayalam_base = Path(malayalam_path)
+    if not malayalam_base.exists():
+        raise ValueError(f"❌ MALAYALAM path does not exist: {malayalam_path}")
+    
+    static_path = malayalam_base / "Static"
+    dynamic_path = malayalam_base / "Dynamic"
+    
+    if not static_path.exists():
+        raise ValueError(f"❌ MALAYALAM/Static directory not found: {static_path}")
+    
+    if not dynamic_path.exists():
+        raise ValueError(f"❌ MALAYALAM/Dynamic directory not found: {dynamic_path}")
+    
+    # Check ISL path
     isl_base = Path(isl_path)
     if not isl_base.exists():
         raise ValueError(f"❌ ISL path does not exist: {isl_path}")
@@ -310,12 +511,13 @@ def validate_isl_path(isl_path: str):
     if not isl_data_path.exists():
         raise ValueError(f"❌ ISL/data directory not found: {isl_data_path}")
     
+    logger.info(f"✓ MALAYALAM path validated: {malayalam_path}")
     logger.info(f"✓ ISL path validated: {isl_path}")
 
 
 def validate_loaded_data(all_data: Dict[int, List[np.ndarray]]):
     """
-    Validate that ISL classes were loaded.
+    Validate that all required classes were loaded.
     
     Args:
         all_data: Dictionary mapping class_id -> list of samples
@@ -323,20 +525,38 @@ def validate_loaded_data(all_data: Dict[int, List[np.ndarray]]):
     Raises:
         ValueError: If critical data is missing
     """
-    isl_count = sum(len(v) for k, v in all_data.items() if 0 <= k < 25)
+    malayalam_static_count = sum(len(v) for k, v in all_data.items() if 0 <= k < 7)
+    malayalam_dynamic_count = sum(len(v) for k, v in all_data.items() if 7 <= k < 15)
+    isl_count = sum(len(v) for k, v in all_data.items() if 15 <= k < 40)
     
     logger.info("")
     logger.info("="*70)
     logger.info("DATA LOADING SUMMARY")
     logger.info("="*70)
-    logger.info(f"ISL (Classes 0-24):  {isl_count:6d} samples")
+    logger.info(f"Malayalam Static (Classes 0-6):   {malayalam_static_count:6d} samples")
+    logger.info(f"Malayalam Dynamic (Classes 7-14): {malayalam_dynamic_count:6d} samples")
+    logger.info(f"ISL (Classes 15-39):              {isl_count:6d} samples")
     logger.info(f"{'─'*70}")
-    logger.info(f"Total:               {isl_count:6d} samples")
+    logger.info(f"Total:                            {malayalam_static_count + malayalam_dynamic_count + isl_count:6d} samples")
     logger.info("="*70)
     
     # Validation
+    if malayalam_static_count == 0:
+        logger.error("❌ CRITICAL: No Malayalam Static data loaded!")
+        logger.error("   Expected: 1,000+ samples")
+        logger.error("   Actual: 0 samples")
+        logger.error("   This typically means the MALAYALAM/Static directory is empty")
+        raise ValueError("Malayalam Static data not loaded")
+    
+    if malayalam_dynamic_count == 0:
+        logger.error("❌ CRITICAL: No Malayalam Dynamic data loaded!")
+        logger.error("   Expected: 1,000+ samples")
+        logger.error("   Actual: 0 samples")
+        logger.error("   This typically means the MALAYALAM/Dynamic directory is empty")
+        raise ValueError("Malayalam Dynamic data not loaded")
+    
     if isl_count == 0:
-        logger.error("❌ CRITICAL: No ISL data loaded!")
+        logger.error("❌ ERROR: No ISL data loaded!")
         logger.error("   Expected: 6,000+ samples")
         logger.error("   Actual: 0 samples")
         raise ValueError("ISL data not loaded")
@@ -345,17 +565,23 @@ def validate_loaded_data(all_data: Dict[int, List[np.ndarray]]):
     logger.info("")
     
     return {
+        'malayalam_static': malayalam_static_count,
+        'malayalam_dynamic': malayalam_dynamic_count,
         'isl': isl_count,
-        'total': isl_count
+        'total': malayalam_static_count + malayalam_dynamic_count + isl_count
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Preprocess ISL sign language dataset")
+    parser = argparse.ArgumentParser(description="Preprocess sign language datasets")
+    parser.add_argument('--malayalam_path', type=str, required=True,
+                       help='Path to MALAYALAM dataset directory')
     parser.add_argument('--isl_path', type=str, required=True,
                        help='Path to ISL dataset directory')
     parser.add_argument('--output', type=str, default='data/processed',
                        help='Output directory for processed data')
+    parser.add_argument('--augment_count', type=int, default=75,
+                       help='Target samples per rare class (classes 7-14)')
     parser.add_argument('--max_seq_len', type=int, default=60,
                        help='Maximum sequence length')
     parser.add_argument('--min_confidence', type=float, default=0.3,
@@ -363,45 +589,62 @@ def main():
     
     args = parser.parse_args()
     
-    # Validate path before processing
+    # Validate paths before processing
     try:
-        validate_isl_path(args.isl_path)
+        validate_dataset_paths(args.malayalam_path, args.isl_path)
     except ValueError as e:
         logger.error(f"\n{e}\n")
         logger.error("Please ensure:")
-        logger.error("  1. ISL_PATH is set correctly")
-        logger.error("  2. Directory contains the required subdirectories")
+        logger.error("  1. MALAYALAM_PATH is set correctly")
+        logger.error("  2. ISL_PATH is set correctly")
+        logger.error("  3. Both directories contain the required subdirectories")
         logger.error("")
         logger.error("Example:")
+        logger.error("  export MALAYALAM_PATH=/path/to/MALAYALAM")
         logger.error("  export ISL_PATH=/path/to/ISL")
-        logger.error("  python preprocessing/preprocess.py --isl_path \"$ISL_PATH\"")
+        logger.error("  python preprocessing/preprocess.py \\")
+        logger.error("    --malayalam_path \"$MALAYALAM_PATH\" \\")
+        logger.error("    --isl_path \"$ISL_PATH\"")
         exit(1)
     
     logger.info("="*50)
-    logger.info("ISL PREPROCESSING PIPELINE")
+    logger.info("SIGN LANGUAGE PREPROCESSING PIPELINE")
     logger.info("="*50)
     
-    # Load ISL dataset
+    # Initialize MediaPipe extractor
+    extractor = MediaPipeExtractor(
+        static_image_mode=True,
+        max_num_hands=2,
+        min_detection_confidence=args.min_confidence,
+        min_tracking_confidence=args.min_confidence
+    )
+    
+    # Load datasets
+    malayalam_static = load_malayalam_static(args.malayalam_path, extractor)
+    malayalam_dynamic = load_malayalam_dynamic(args.malayalam_path, extractor, args.max_seq_len)
     isl_data = load_isl_data(args.isl_path)
+    
+    # Combine all data
+    all_data = {**malayalam_static, **malayalam_dynamic, **isl_data}
     
     # Validate loaded data
     try:
-        data_stats = validate_loaded_data(isl_data)
+        data_stats = validate_loaded_data(all_data)
     except ValueError as e:
         logger.error(f"\n{e}\n")
-        logger.error("Failed to load required dataset.")
+        logger.error("Failed to load required datasets.")
         logger.error("Please verify:")
-        logger.error("  1. Dataset path is correct")
-        logger.error("  2. Dataset contains the expected directories")
-        logger.error("  3. Dataset is not corrupted or empty")
+        logger.error("  1. Dataset paths are correct")
+        logger.error("  2. Datasets contain the expected directories")
+        logger.error("  3. Datasets are not corrupted or empty")
         exit(1)
     
     # Log statistics
-    total_samples = sum(len(samples) for samples in isl_data.values())
-    logger.info(f"\nLoaded {total_samples} samples from {len(isl_data)} classes")
+    total_samples = sum(len(samples) for samples in all_data.values())
+    logger.info(f"\nLoaded {total_samples} samples from {len(all_data)} classes")
     
     # Apply augmentation
-    augmented_data = apply_augmentation(isl_data, args.max_seq_len)
+    augmented_data = apply_augmentation(all_data, args.augment_count, args.max_seq_len)
     
     # Log augmented statistics
     total_augmented = sum(len(samples) for samples in augmented_data.values())
@@ -412,6 +655,9 @@ def main():
     
     # Save processed data
     save_processed_data(train_df, val_df, test_df, args.output)
+    
+    # Clean up
+    extractor.close()
     
     logger.info("\n" + "="*50)
     logger.info("✓ PREPROCESSING COMPLETE!")
