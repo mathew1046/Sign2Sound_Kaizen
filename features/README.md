@@ -108,12 +108,12 @@ Reserved for future facial expression integration using MediaPipe Face Mesh.
 
 ## Sequence Handling
 
-### Static Signs (Classes 0-6, 15-39)
+### Static Signs
 - Single frame per sign
 - Stored as (1, 126) then padded to (60, 126)
 - Only first frame contains data, rest are zeros
 
-### Dynamic Signs (Classes 7-14)
+### Dynamic Signs
 - Multiple frames per sign (5-100 frames)
 - Stored as (num_frames, 126)
 - Padded or truncated to (60, 126)
@@ -153,7 +153,7 @@ Save as .npy file
 
 ## MediaPipe Configuration
 
-### For High-Quality Images (Malayalam Static)
+### For High-Quality Images
 ```python
 HandLandmarkDetector(
     static_image_mode=True,
@@ -163,7 +163,7 @@ HandLandmarkDetector(
 )
 ```
 
-### For Low-Quality Images (Malayalam Dynamic)
+### For Challenging Images
 ```python
 HandLandmarkDetector(
     static_image_mode=True,

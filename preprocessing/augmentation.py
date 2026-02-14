@@ -2,8 +2,7 @@
 Data Augmentation Module for Sign Language Recognition
 
 This module provides various data augmentation techniques to improve model
-robustness and address class imbalance, especially for Malayalam dynamic
-signs (classes 7-14).
+robustness and address class imbalance for ISL signs.
 
 Augmentation Techniques:
 1. Gaussian Noise - Add random noise to coordinates

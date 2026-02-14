@@ -1,6 +1,6 @@
 # Team Kaizen - Sign Language Recognition System
 
-**BiLSTM-based Sign Language Recognition for Malayalam + ISL**
+**BiLSTM-based Sign Language Recognition for ISL**
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)
@@ -8,10 +8,8 @@
 
 ## 🎯 Project Overview
 
-A production-ready sign language recognition system achieving **98%+ test accuracy** using Bidirectional LSTM networks. The system recognizes 40 classes across:
-- **Malayalam Static Signs** (Classes 0-6): അ, ആ, ഇ, ഈ, ഉ, ഏ, ഐ
-- **Malayalam Dynamic Signs** (Classes 7-14): ഒ, ഓ, ഔ, ക, ഖ, ഗ, ഘ, ങ
-- **Indian Sign Language** (Classes 15-39): A-Z (excluding R)
+A production-ready sign language recognition system achieving **98%+ test accuracy** using Bidirectional LSTM networks. The system recognizes 25 ISL classes:
+- **Indian Sign Language** (Classes 0-24): A-Z (excluding R)
 
 ## 🏗️ Architecture
 
@@ -19,7 +17,7 @@ A production-ready sign language recognition system achieving **98%+ test accura
 - **Parameters**: 2.53M (12.8 MB)
 - **Architecture**: 2-layer Bidirectional LSTM + 3 FC layers
 - **Input**: 126-dimensional feature vectors (2 hands × 21 landmarks × 3 coords)
-- **Output**: 40 classes
+- **Output**: 25 classes
 - **Inference Speed**: 8ms per sample, 35 FPS real-time
 
 ```
@@ -33,9 +31,9 @@ FC1 (512 → 256) + ReLU + Dropout
     ↓
 FC2 (256 → 128) + ReLU + Dropout
     ↓
-FC3 (128 → 40)
+FC3 (128 → 25)
     ↓
-Output (40 classes)
+Output (25 classes)
 ```
 
 ## 📊 Performance
@@ -68,21 +66,12 @@ pip install -r requirements.txt
 
 ### Dataset Setup
 
-1. Download the datasets:
-   - Malayalam dataset (Static + Dynamic)
-   - ISL dataset (.npy files)
+1. Download the dataset:
+    - ISL dataset (.npy files)
 
 2. Organize the data structure:
 ```
 datasets/
-├── MALAYALAM/
-│   ├── Static/
-│   │   ├── Character_1/
-│   │   └── ...
-│   ├── Dynamic/
-│   │   ├── Character_1/
-│   │   └── ...
-│   └── annotations.csv
 └── ISL/
     └── data/
         ├── A/
@@ -95,16 +84,14 @@ datasets/
 ```bash
 # Extract features and create train/val/test splits
 python preprocessing/preprocess.py \
-    --malayalam_path /path/to/MALAYALAM \
     --isl_path /path/to/ISL \
     --output data/processed
 ```
 
 This will:
 - Extract MediaPipe hand landmarks from images
-- Apply aggressive augmentation to classes 7-14 (50-100 samples per class)
+- Apply POV flip augmentation
 - Create stratified 70/15/15 train/val/test splits
-- Generate 96,092+ total samples
 
 ### Training
 
@@ -227,7 +214,7 @@ SIGN2SOUND_Kaizen/
 
 ### Preprocessing Pipeline
 - **MediaPipe Hands**: Extract 126-dimensional features (21 landmarks × 2 hands × 3 coords)
-- **Aggressive Augmentation**: 6 techniques applied to problematic classes 7-14
+- **Augmentation**: 6 techniques available (POV flip used by default)
   - Gaussian noise (σ=0.01-0.03)
   - Scale variation (0.85-1.15)
   - Translation (±0.1)
@@ -257,9 +244,7 @@ SIGN2SOUND_Kaizen/
 - **Training Time**: 12.5 minutes on NVIDIA GPU
 
 ### Per-Category Accuracy
-- **ISL Classes (15-39)**: 98-99%
-- **Malayalam Static (0-6)**: 97-99%
-- **Malayalam Dynamic (7-14)**: 80-90% (improved from 0% with augmentation)
+- **ISL Classes (0-24)**: 98-99%
 
 ## 🛠️ Technical Details
 
@@ -283,8 +268,8 @@ SIGN2SOUND_Kaizen/
 **Issue: Out of memory during training**
 - Solution: Reduce batch_size in `training/config.yaml` (try 32 or 16)
 
-**Issue: Low accuracy on classes 7-14**
-- Solution: Increase augmentation samples (50 → 100 per class)
+**Issue: Low accuracy on some classes**
+- Solution: Increase training data or apply additional augmentation
 
 **Issue: Slow real-time inference**
 - Solution: Ensure GPU is available, reduce frame resolution
@@ -296,7 +281,7 @@ If you use this work, please cite:
 ```bibtex
 @software{kaizen_sign2sound_2026,
   author = {Team Kaizen},
-  title = {BiLSTM-based Sign Language Recognition for Malayalam and ISL},
+    title = {BiLSTM-based Sign Language Recognition for ISL},
   year = {2026},
   url = {<repository-url>}
 }
@@ -318,7 +303,7 @@ Contributions are welcome! Please follow these steps:
 ## 👥 Team Kaizen
 
 - Developed for sign language accessibility
-- Focus on Malayalam and Indian Sign Language
+- Focus on Indian Sign Language (ISL)
 - Target: Real-time, production-ready system
 
 ## 📞 Support

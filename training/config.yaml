@@ -6,7 +6,7 @@ model:
   input_size: 126          # Feature dimension (2 hands × 21 landmarks × 3 coords)
   hidden_size: 256         # LSTM hidden units per direction
   num_layers: 2            # Number of LSTM layers
-  num_classes: 40          # Total classes (Malayalam + ISL)
+  num_classes: 25          # Total classes (ISL only, A-Z excluding R)
   dropout: 0.3             # Dropout rate
   bidirectional: true      # Use bidirectional LSTM
   max_seq_len: 60          # Maximum sequence length
@@ -98,10 +98,9 @@ evaluation:
 
 # Experiment Tracking
 experiment:
-  name: "bilstm_malayalam_isl"  # Experiment name
-  notes: "BiLSTM model for Malayalam + ISL sign language recognition with class weighting"
+  name: "bilstm_isl"  # Experiment name
+  notes: "BiLSTM model for ISL sign language recognition with class weighting"
   tags:
     - "bilstm"
     - "sign-language"
-    - "malayalam"
     - "isl"

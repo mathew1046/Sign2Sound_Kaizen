@@ -42,7 +42,7 @@ class TextToSpeech:
         """
         try:
             # Remove class prefix if present
-            text = text.replace('Malayalam_', '').replace('ISL_', '')
+            text = text.replace('ISL_', '')
             
             logger.info(f"Speaking: {text}")
             self.engine.say(text)
@@ -78,7 +78,7 @@ class TextToSpeech:
         Set speech language.
         
         Args:
-            language: Language code (e.g., 'english', 'malayalam')
+            language: Language code (e.g., 'english')
         """
         # Note: Language support depends on system TTS engine
         logger.info(f"Language set to: {language}")
