@@ -40,7 +40,7 @@ python inference/infer.py \
   {
     "image": "path/to/image.jpg",
     "class_id": 5,
-    "class_name": "Malayalam_ഏ",
+    "class_name": "ISL_A",
     "confidence": 0.9834
   },
   ...
@@ -123,7 +123,7 @@ python inference/infer.py \
 Output:
 ```
 Image: test_image.jpg
-  Prediction: Malayalam_അ
+  Prediction: ISL_A
   Confidence: 98.34%
 ```
 

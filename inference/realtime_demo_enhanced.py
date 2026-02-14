@@ -129,9 +129,7 @@ class EnhancedRealtimeDemoApp:
             for idx, name in loaded_mapping.items():
                 if name.startswith("ISL_"):
                     self.class_mapping[idx] = name.replace("ISL_", "")
-                else:
-                    self.class_mapping[idx] = name
-            logger.info(f"Loaded class mapping: {len(self.class_mapping)} classes")
+            logger.info(f"Loaded ISL class mapping: {len(self.class_mapping)} classes")
         else:
             self.class_mapping = self.DEFAULT_CLASS_MAPPING
             logger.warning("Using default class mapping")
@@ -406,6 +404,16 @@ def main():
         logger.error(f"Failed to open camera {args.camera}")
         return
     
+    # Force 720p @ 30 FPS
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+
+    actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    actual_fps = cap.get(cv2.CAP_PROP_FPS)
+    logger.info(f"Camera settings: {actual_w}x{actual_h} @ {actual_fps:.2f} FPS")
+
     logger.info("Starting real-time demo. Press 'q' to quit, 'c' to clear text, 'r' to reset buffer")
     
     try:

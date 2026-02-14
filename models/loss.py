@@ -2,7 +2,7 @@
 Loss Functions for Sign Language Recognition
 
 This module implements weighted loss functions to handle class imbalance
-between Malayalam (classes 0-14) and ISL (classes 15-39).
+for ISL classes.
 
 Author: Team Kaizen
 Date: January 2026
@@ -53,7 +53,7 @@ class WeightedCrossEntropyLoss(nn.Module):
 
 
 def calculate_class_weights(train_csv_path: str, 
-                           num_classes: int = 40,
+                           num_classes: int = 25,
                            device: str = 'cpu') -> torch.Tensor:
     """
     Calculate class weights from training data distribution.
@@ -99,7 +99,7 @@ def calculate_class_weights(train_csv_path: str,
 
 
 def calculate_class_weights_from_dict(class_distribution: Dict[int, int],
-                                     num_classes: int = 40,
+                                     num_classes: int = 25,
                                      device: str = 'cpu') -> torch.Tensor:
     """
     Calculate class weights from class distribution dictionary.

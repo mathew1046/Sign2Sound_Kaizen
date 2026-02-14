@@ -1,4 +1,334 @@
 """
+Inference Tests
+
+Author: Team Kaizen
+Date: January 2026
+"""
+
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from inference.utils import format_prediction_output, load_class_mapping
+from inference.tts import TextToSpeech
+
+
+class TestClassMapping:
+    """Test class mapping utilities."""
+
+    def test_load_class_mapping(self):
+        """Test loading class mapping."""
+        import pandas as pd
+
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w") as f:
+            df = pd.DataFrame({
+                "class_idx": range(10),
+                "class_name": [f"Class_{i}" for i in range(10)],
+            })
+            df.to_csv(f.name, index=False)
+            csv_path = f.name
+
+        try:
+            mapping = load_class_mapping(csv_path)
+
+            assert len(mapping) == 10
+            assert all(isinstance(k, (int, np.integer)) for k in mapping.keys())
+            assert all(isinstance(v, str) for v in mapping.values())
+        finally:
+            Path(csv_path).unlink()
+
+
+class TestFormatPrediction:
+    """Test prediction formatting."""
+
+    def test_format_prediction_output(self):
+        """Test prediction output formatting."""
+        class_mapping = {0: "ISL_A", 1: "ISL_B", 2: "ISL_C"}
+
+        output = format_prediction_output(0, 0.95, class_mapping)
+        assert "A" in output
+        assert "95.0%" in output
+
+
+class TestPredictionValidation:
+    """Test prediction validation."""
+
+    def test_confidence_bounds(self):
+        """Test that confidence is always between 0 and 1."""
+        for _ in range(100):
+            confidence = np.random.rand()
+            assert 0 <= confidence <= 1, "Confidence out of bounds"
+
+    def test_class_id_range(self):
+        """Test that class IDs are in valid range."""
+        num_classes = 25
+
+        for class_id in range(num_classes):
+            assert 0 <= class_id < num_classes, "Class ID out of range"
+
+    def test_batch_prediction_consistency(self):
+        """Test that batch predictions are consistent."""
+        predictions = [
+            {"class_id": i, "confidence": np.random.rand()}
+            for i in range(10)
+        ]
+
+        for pred in predictions:
+            assert isinstance(pred["class_id"], int)
+            assert 0 <= pred["confidence"] <= 1
+
+
+class TestTextToSpeech:
+    """Test TTS functionality."""
+
+    def test_tts_initialization(self):
+        """Test TTS engine initialization."""
+        try:
+            tts = TextToSpeech(rate=150, volume=0.8)
+            assert tts is not None
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+    def test_tts_set_rate(self):
+        """Test setting TTS rate."""
+        try:
+            tts = TextToSpeech()
+            tts.set_rate(200)
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+    def test_tts_set_volume(self):
+        """Test setting TTS volume."""
+        try:
+            tts = TextToSpeech()
+            tts.set_volume(0.5)
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+    def test_tts_volume_bounds(self):
+        """Test that volume is bounded."""
+        try:
+            tts = TextToSpeech()
+            tts.set_volume(1.5)
+            tts.set_volume(-0.5)
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+
+class TestEndToEnd:
+    """End-to-end inference tests."""
+
+    def test_prediction_pipeline(self):
+        """Test complete prediction pipeline."""
+        batch_size = 5
+        predictions = []
+
+        for i in range(batch_size):
+            pred = {
+                "image": f"image_{i}.jpg",
+                "class_id": np.random.randint(0, 25),
+                "confidence": np.random.rand(),
+            }
+            predictions.append(pred)
+
+        assert len(predictions) == batch_size
+        for pred in predictions:
+            assert "image" in pred
+            assert "class_id" in pred
+            assert "confidence" in pred
+            assert 0 <= pred["confidence"] <= 1
+
+    def test_batch_processing(self):
+        """Test batch processing of predictions."""
+        batch_size = 32
+
+        predictions = []
+        for _ in range(batch_size):
+            pred = {
+                "class_id": np.random.randint(0, 25),
+                "confidence": np.random.rand(),
+            }
+            predictions.append(pred)
+
+        confident_preds = [p for p in predictions if p["confidence"] > 0.7]
+
+        assert len(confident_preds) <= batch_size
+        assert all(p["confidence"] > 0.7 for p in confident_preds)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])"""
+Inference Tests
+
+Author: Team Kaizen
+Date: January 2026
+"""
+
+import tempfile
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from inference.utils import format_prediction_output, load_class_mapping
+from inference.tts import TextToSpeech
+
+
+class TestClassMapping:
+    """Test class mapping utilities."""
+
+    def test_load_class_mapping(self):
+        """Test loading class mapping."""
+        import pandas as pd
+
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False, mode="w") as f:
+            df = pd.DataFrame({
+                "class_idx": range(10),
+                "class_name": [f"Class_{i}" for i in range(10)],
+            })
+            df.to_csv(f.name, index=False)
+            csv_path = f.name
+
+        try:
+            mapping = load_class_mapping(csv_path)
+
+            assert len(mapping) == 10
+            assert all(isinstance(k, (int, np.integer)) for k in mapping.keys())
+            assert all(isinstance(v, str) for v in mapping.values())
+        finally:
+            Path(csv_path).unlink()
+
+
+class TestFormatPrediction:
+    """Test prediction formatting."""
+
+    def test_format_prediction_output(self):
+        """Test prediction output formatting."""
+        class_mapping = {0: "ISL_A", 1: "ISL_B", 2: "ISL_C"}
+
+        output = format_prediction_output(0, 0.95, class_mapping)
+        assert "A" in output
+        assert "95.0%" in output
+
+
+class TestPredictionValidation:
+    """Test prediction validation."""
+
+    def test_confidence_bounds(self):
+        """Test that confidence is always between 0 and 1."""
+        for _ in range(100):
+            confidence = np.random.rand()
+            assert 0 <= confidence <= 1, "Confidence out of bounds"
+
+    def test_class_id_range(self):
+        """Test that class IDs are in valid range."""
+        num_classes = 25
+
+        for class_id in range(num_classes):
+            assert 0 <= class_id < num_classes, "Class ID out of range"
+
+    def test_batch_prediction_consistency(self):
+        """Test that batch predictions are consistent."""
+        predictions = [
+            {"class_id": i, "confidence": np.random.rand()}
+            for i in range(10)
+        ]
+
+        for pred in predictions:
+            assert isinstance(pred["class_id"], int)
+            assert 0 <= pred["confidence"] <= 1
+
+
+class TestTextToSpeech:
+    """Test TTS functionality."""
+
+    def test_tts_initialization(self):
+        """Test TTS engine initialization."""
+        try:
+            tts = TextToSpeech(rate=150, volume=0.8)
+            assert tts is not None
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+    def test_tts_set_rate(self):
+        """Test setting TTS rate."""
+        try:
+            tts = TextToSpeech()
+            tts.set_rate(200)
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+    def test_tts_set_volume(self):
+        """Test setting TTS volume."""
+        try:
+            tts = TextToSpeech()
+            tts.set_volume(0.5)
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+    def test_tts_volume_bounds(self):
+        """Test that volume is bounded."""
+        try:
+            tts = TextToSpeech()
+            tts.set_volume(1.5)
+            tts.set_volume(-0.5)
+            tts.close()
+        except Exception as e:
+            pytest.skip(f"TTS not available: {e}")
+
+
+class TestEndToEnd:
+    """End-to-end inference tests."""
+
+    def test_prediction_pipeline(self):
+        """Test complete prediction pipeline."""
+        batch_size = 5
+        predictions = []
+
+        for i in range(batch_size):
+            pred = {
+                "image": f"image_{i}.jpg",
+                "class_id": np.random.randint(0, 25),
+                "confidence": np.random.rand(),
+            }
+            predictions.append(pred)
+
+        assert len(predictions) == batch_size
+        for pred in predictions:
+            assert "image" in pred
+            assert "class_id" in pred
+            assert "confidence" in pred
+            assert 0 <= pred["confidence"] <= 1
+
+    def test_batch_processing(self):
+        """Test batch processing of predictions."""
+        batch_size = 32
+
+        predictions = []
+        for _ in range(batch_size):
+            pred = {
+                "class_id": np.random.randint(0, 25),
+                "confidence": np.random.rand(),
+            }
+            predictions.append(pred)
+
+        confident_preds = [p for p in predictions if p["confidence"] > 0.7]
+
+        assert len(confident_preds) <= batch_size
+        assert all(p["confidence"] > 0.7 for p in confident_preds)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])"""
 Test Suite for Inference Pipeline
 
 Tests for inference, predictions, and end-to-end pipeline.

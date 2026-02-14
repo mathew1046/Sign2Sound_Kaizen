@@ -109,8 +109,8 @@ def format_prediction_output(class_id: int,
     """
     class_name = class_mapping.get(class_id, f"Class_{class_id}")
     
-    # Extract clean name (remove Malayalam_ or ISL_ prefix)
-    clean_name = class_name.replace('Malayalam_', '').replace('ISL_', '')
+    # Extract clean name (remove ISL_ prefix)
+    clean_name = class_name.replace('ISL_', '')
     
     return f"{clean_name} ({confidence*100:.1f}%)"
 

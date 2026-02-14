@@ -38,7 +38,7 @@ Output Logits: (batch, 25)
 | BiLSTM | (batch, 60, 126) | (batch, 60, 512) | ~2.1M |
 | FC1 | (batch, 512) | (batch, 256) | 131,328 |
 | FC2 | (batch, 256) | (batch, 128) | 32,896 |
-| FC3 | (batch, 128) | (batch, 40) | 5,160 |
+| FC3 | (batch, 128) | (batch, 25) | 3,225 |
 
 ### LSTM Configuration
 - Input size: 126 (features)
@@ -50,7 +50,7 @@ Output Logits: (batch, 25)
 ### Fully Connected Layers
 - FC1: 512 → 256 with ReLU and Dropout (0.3)
 - FC2: 256 → 128 with ReLU and Dropout (0.3)
-- FC3: 128 → 40 (output layer, no activation)
+- FC3: 128 → 25 (output layer, no activation)
 
 ## Performance
 
@@ -74,7 +74,7 @@ Output Logits: (batch, 25)
 
 ### Weighted Cross-Entropy Loss
 
-Handles class imbalance between Malayalam and ISL:
+Handles class imbalance across ISL classes:
 
 ```python
 weights = total_samples / (num_classes * class_counts)
@@ -82,11 +82,7 @@ loss = CrossEntropyLoss(weight=weights)
 ```
 
 **Weight Ratios:**
-- ISL classes (15-39): ~1.0x (baseline)
-- Malayalam static (0-6): ~8.3x
-- Malayalam dynamic (7-14): ~33x (after augmentation)
-
-This ensures the model learns all classes despite the imbalance.
+- ISL classes: ~1.0x baseline (adjust per dataset distribution)
 
 ## Key Features
 
@@ -125,7 +121,7 @@ model = BiLSTMClassifier(
     input_size=126,
     hidden_size=256,
     num_layers=2,
-    num_classes=40,
+    num_classes=25,
     dropout=0.3
 )
 
@@ -256,12 +252,12 @@ print(f"Size: {size_mb:.2f} MB")
                 │
                 ▼
 ┌─────────────────────────────────────────┐
-│     FC3: 128 → 40                       │
+│     FC3: 128 → 25                       │
 └───────────────┬─────────────────────────┘
                 │
                 ▼
 ┌─────────────────────────────────────────┐
-│     Output Logits (batch, 40)           │
+│     Output Logits (batch, 25)           │
 └─────────────────────────────────────────┘
 ```
 

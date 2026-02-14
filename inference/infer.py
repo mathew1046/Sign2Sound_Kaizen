@@ -29,6 +29,7 @@ from models.model import load_model
 from features.hand_landmarks import HandLandmarkDetector
 from features.feature_utils import pad_or_truncate
 from inference.utils import load_class_mapping
+from inference.feature_processing import normalize_landmarks_wrist_relative
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,17 +38,12 @@ logger = logging.getLogger(__name__)
 class SignLanguagePredictor:
     """Predict sign language from images."""
     
-    # Complete class mapping: class_index -> letter/character
+    # ISL-only class mapping: class_index -> letter (A-Z excluding R)
     DEFAULT_CLASS_MAPPING = {
-        # Malayalam Static (0-6)
-        0: 'അ', 1: 'ആ', 2: 'ഇ', 3: 'ഈ', 4: 'ഉ', 5: 'ഏ', 6: 'ഐ',
-        # Malayalam Dynamic (7-14)
-        7: 'ഒ', 8: 'ഓ', 9: 'ഔ', 10: 'ക', 11: 'ഖ', 12: 'ഗ', 13: 'ഘ', 14: 'ങ',
-        # ISL (15-39) - A-Z excluding R
-        15: 'A', 16: 'B', 17: 'C', 18: 'D', 19: 'E', 20: 'F', 21: 'G', 
-        22: 'H', 23: 'I', 24: 'J', 25: 'K', 26: 'L', 27: 'M', 28: 'N', 
-        29: 'O', 30: 'P', 31: 'Q', 32: 'S', 33: 'T', 34: 'U', 35: 'V', 
-        36: 'W', 37: 'X', 38: 'Y', 39: 'Z'
+        0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G', 7: 'H',
+        8: 'I', 9: 'J', 10: 'K', 11: 'L', 12: 'M', 13: 'N', 14: 'O',
+        15: 'P', 16: 'Q', 17: 'S', 18: 'T', 19: 'U', 20: 'V', 21: 'W',
+        22: 'X', 23: 'Y', 24: 'Z'
     }
     
     def __init__(self, model_path: str, device: str = None):
@@ -71,16 +67,12 @@ class SignLanguagePredictor:
         loaded_mapping = load_class_mapping(str(csv_path))
         
         if loaded_mapping:
-            # Extract just the character from "Malayalam_X" or "ISL_X" format
+            # Extract just the letter from "ISL_X" format
             self.class_mapping = {}
             for idx, name in loaded_mapping.items():
-                if name.startswith('Malayalam_'):
-                    self.class_mapping[idx] = name.replace('Malayalam_', '')
-                elif name.startswith('ISL_'):
+                if name.startswith('ISL_'):
                     self.class_mapping[idx] = name.replace('ISL_', '')
-                else:
-                    self.class_mapping[idx] = name
-            logger.info(f"Loaded class mapping from CSV with {len(self.class_mapping)} classes")
+            logger.info(f"Loaded ISL class mapping from CSV with {len(self.class_mapping)} classes")
         else:
             # Fallback to default mapping
             self.class_mapping = self.DEFAULT_CLASS_MAPPING
@@ -118,6 +110,9 @@ class SignLanguagePredictor:
             logger.warning(f"Failed to extract features from {image_path}")
             return None, 0.0, "NO_HANDS"
         
+        # Apply wrist-relative normalization (training-aligned)
+        features = normalize_landmarks_wrist_relative(features)
+
         # Prepare input
         features = pad_or_truncate(features, max_len=60)
         features_tensor = torch.from_numpy(features).float().unsqueeze(0).to(self.device)

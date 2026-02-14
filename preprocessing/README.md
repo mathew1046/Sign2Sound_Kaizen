@@ -18,65 +18,45 @@ The preprocessing pipeline consists of several stages:
 Main preprocessing script that orchestrates the entire pipeline.
 
 **Usage:**
+# Preprocessing Module
+
+This module handles preprocessing of the ISL dataset.
+
+## Usage
+
 ```bash
 python preprocessing/preprocess.py \
-    --malayalam_path /path/to/MALAYALAM \
     --isl_path /path/to/ISL \
-    --output data/processed \
-    --augment_count 75 \
-    --max_seq_len 60 \
-    --min_confidence 0.3
+    --output data/processed
 ```
 
-**Arguments:**
-- `--malayalam_path`: Path to Malayalam dataset directory
+## Arguments
+
 - `--isl_path`: Path to ISL dataset directory
 - `--output`: Output directory for processed data (default: `data/processed`)
-- `--augment_count`: Target number of samples for rare classes 7-14 (default: 75)
+- `--augment_count`: Unused for ISL-only pipeline (reserved)
 - `--max_seq_len`: Maximum sequence length (default: 60)
-- `--min_confidence`: MediaPipe detection confidence (default: 0.3)
+- `--min_confidence`: MediaPipe detection confidence threshold (default: 0.3)
 
-### `extract_features.py`
-MediaPipe-based feature extraction module.
+## Preprocessing Steps
 
-**Key Classes:**
-- `MediaPipeExtractor`: Extract 126-dimensional features from images/videos
-  - `extract_from_image()`: Single image extraction
-  - `extract_from_sequence()`: Video sequence extraction
-  - `validate_features()`: Quality validation
+1. Load ISL dataset
+2. Extract MediaPipe hand landmarks
+3. Apply wrist-relative normalization
+4. Apply POV flip augmentation
+5. Create train/val/test splits
+6. Save processed features
 
-**Feature Structure:**
-```
-126 dimensions = 2 hands × 21 landmarks × 3 coordinates (x, y, z)
-- Hand 1: landmarks 0-20 (63 features)
-- Hand 2: landmarks 0-20 (63 features)
-```
+## Data Augmentation
 
-### `augmentation.py`
-Data augmentation techniques for improving model robustness.
+- POV horizontal flip (default)
 
-**Techniques:**
-1. **Gaussian Noise** (`add_gaussian_noise`): σ ∈ {0.01, 0.02, 0.03}
-2. **Scale Variation** (`scale_variation`): scale ∈ [0.85, 1.15]
-3. **Translation** (`translate`): ±0.1 in x and y
-4. **Rotation** (`rotate`): ±15 degrees
-5. **Horizontal Flip** (`horizontal_flip`): POV augmentation
-6. **Temporal Speed** (`temporal_speed`): 0.8-1.2x speed (dynamic signs only)
+## Class Distribution
 
-**Usage:**
-```python
-from augmentation import augment_sample, horizontal_flip
+- ISL (Classes 0-24)
 
-# Generate 10 augmented versions
-augmented = augment_sample(original_data, num_augmentations=10)
+## MediaPipe Settings
 
-# Apply POV flip
-flipped = horizontal_flip(original_data)
-```
-
-## MediaPipe Configuration
-
-### Settings for Malayalam Static (Classes 0-6)
 ```python
 MediaPipeExtractor(
     static_image_mode=True,
@@ -86,33 +66,9 @@ MediaPipeExtractor(
 )
 ```
 
-### Settings for Malayalam Dynamic (Classes 7-14)
-```python
-MediaPipeExtractor(
-    static_image_mode=True,
-    max_num_hands=2,
-    min_detection_confidence=0.3,  # Lower for better recall
-    min_tracking_confidence=0.3
-)
-```
-
 ## Augmentation Strategy
 
-### Malayalam Static (Classes 0-6)
-- **Original**: ~150 samples per class
-- **Technique**: Horizontal flip only (POV)
-- **Result**: ~300 samples per class
-
-### Malayalam Dynamic (Classes 7-14) - PROBLEMATIC
-- **Original**: ~5-10 valid samples per class (96% fail MediaPipe)
-- **Techniques**: ALL 6 augmentation methods
-- **Result**: 75 samples per class (configurable)
-- **Critical**: Without augmentation, these classes have 0% accuracy
-
-### ISL (Classes 15-39)
-- **Original**: ~500 samples per class
-- **Technique**: Horizontal flip only (POV)
-- **Result**: ~1,000 samples per class
+- POV horizontal flip (default)
 
 ## Output Structure
 
@@ -135,7 +91,7 @@ data/processed/
 
 **Split CSV columns:**
 - `sample_id`: Unique sample identifier
-- `class_idx`: Class index (0-39)
+- `class_idx`: Class index (0-24)
 - `class_name`: Human-readable class name
 - `file_path`: Path to .npy feature file
 - `seq_length`: Number of valid frames in sequence
@@ -171,29 +127,20 @@ Approximate processing times (varies by hardware):
 
 ## Known Issues & Solutions
 
-### Issue 1: Low MediaPipe Detection Rate for Classes 7-14
-**Problem**: ~96% of Malayalam dynamic images fail hand detection.
-
-**Solution**: 
-- Use `min_detection_confidence=0.3` (lower threshold)
-- Apply aggressive augmentation to valid samples
-- Generate 50-100 samples per class from ~5 originals
-
-### Issue 2: Variable Sequence Lengths
-**Problem**: Dynamic signs have 5-100 frames per sequence.
+### Issue 1: Variable Sequence Lengths
+**Problem**: Dynamic signs can have 5-100 frames per sequence.
 
 **Solution**:
 - Pad short sequences to `max_seq_len=60` with zeros
 - Truncate long sequences to `max_seq_len=60`
 - Store original sequence length for attention masks
 
-### Issue 3: Class Imbalance
-**Problem**: ISL has 10x more samples than Malayalam.
+### Issue 2: Class Imbalance
+**Problem**: Some ISL letters may have fewer samples.
 
 **Solution**:
 - Use weighted cross-entropy loss during training
 - Class weights calculated as: `total / (num_classes * class_count)`
-- Malayalam classes get ~125x higher weight than ISL
 
 ## Troubleshooting
 
