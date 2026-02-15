@@ -31,11 +31,26 @@ if [ -z "$ISL_PATH" ]; then
     echo "  Export: export ISL_PATH=/path/to/isl/data"
     echo ""
     echo "Skipping preprocessing..."
+elif [ -z "$DATA1_PATH" ]; then
+    echo -e "${RED}✗ Please set DATA1_PATH environment variable${NC}"
+    echo "  Export: export DATA1_PATH=./data1/MP_Data_Normalized"
+    echo ""
+    echo "Skipping preprocessing..."
+elif [ -z "$DATA2_PATH" ]; then
+    echo -e "${RED}✗ Please set DATA2_PATH environment variable${NC}"
+    echo "  Export: export DATA2_PATH=./MP_Data_Normalized"
+    echo ""
+    echo "Skipping preprocessing..."
 else
-    echo "Processing ISL data: $ISL_PATH"
+    echo "Processing combined datasets:"
+    echo "  - ISL data: $ISL_PATH"
+    echo "  - data1: $DATA1_PATH"
+    echo "  - data2: $DATA2_PATH"
     
     python3 preprocessing/preprocess.py \
         --isl_path "$ISL_PATH" \
+        --data1_path "$DATA1_PATH" \
+        --data2_path "$DATA2_PATH" \
         --output data/processed \
         --augment_count 0 \
         --max_seq_len 60

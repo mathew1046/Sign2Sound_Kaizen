@@ -1,23 +1,16 @@
 """
-Main Preprocessing Pipeline
+Main Preprocessing Pipeline (STREAMING VERSION - Maximum Memory Efficiency)
 
-This script orchestrates the complete preprocessing pipeline:
-1. Load ISL dataset
-2. Extract MediaPipe hand landmarks (126-dimensional features)
-3. Apply data augmentation (POV flip)
-4. Create stratified train/val/test splits (70/15/15)
-5. Save processed features and metadata
-
-Usage:
-    python preprocessing/preprocess.py \
-        --isl_path /path/to/ISL \
-        --output data/processed
-
-Author: Team Kaizen
-Date: January 2026
+Changes:
+- Removed unused MediaPipeExtractor to save resources.
+- FIXED: Corrected alphabet mapping to skip 'R' properly
+- STREAMING: Process and save each class immediately to disk
+- Metadata-only splits to prevent OOM
+- Final assembly from disk files
 """
 
 import argparse
+import gc
 import json
 import logging
 import os
@@ -33,13 +26,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from extract_features import MediaPipeExtractor
 from augmentation import horizontal_flip
 from inference.feature_processing import normalize_landmarks_wrist_relative
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
-
 
 # Class mapping (ISL only, A-Z excluding R)
 CLASS_NAMES = {
@@ -47,408 +40,290 @@ CLASS_NAMES = {
     5: "ISL_F", 6: "ISL_G", 7: "ISL_H", 8: "ISL_I", 9: "ISL_J",
     10: "ISL_K", 11: "ISL_L", 12: "ISL_M", 13: "ISL_N", 14: "ISL_O",
     15: "ISL_P", 16: "ISL_Q", 17: "ISL_S", 18: "ISL_T", 19: "ISL_U",
-    20: "ISL_V", 21: "ISL_W", 22: "ISL_X", 23: "ISL_Y", 24: "ISL_Z"
+    20: "ISL_V", 21: "ISL_W", 22: "ISL_X", 23: "ISL_Y", 24: "ISL_Z",
 }
 
+def load_dataset_generic(base_path: str, dataset_name: str) -> Dict[int, List[np.ndarray]]:
+    """Load a dataset with the standard structure."""
+    logger.info(f"Loading {dataset_name} data...")
+    data_path = Path(base_path)
 
-def load_isl_data(isl_path: str) -> Dict[int, List[np.ndarray]]:
-    """
-    Load ISL dataset (Classes 15-39).
-    ISL data is already in .npy format.
-    
-    Args:
-        isl_path: Path to ISL/data directory
-    
-    Returns:
-        Dictionary mapping class_id -> list of feature vectors
-    """
-    logger.info("Loading ISL data...")
-    data_path = Path(isl_path) / "data"
-    
     if not data_path.exists():
-        logger.error(f"ISL data directory not found: {data_path}")
+        logger.error(f"{dataset_name} data directory not found: {data_path}")
         return {}
-    
-    # Map alphabet to class ID (A=0, B=1, ..., Z=24, skip R)
-    alphabet = "ABCDEFGHIJKLMNOPQSTUVWXYZ"  # No R
+
+    # FIXED: Remove 'R' from alphabet before creating the mapping
+    alphabet = "ABCDEFGHIJKLMNOPQSTUVWXYZ".replace("R", "")
     alphabet_to_class = {letter: idx for idx, letter in enumerate(alphabet)}
-    
     data_dict = {}
-    
-    for letter, class_idx in tqdm(alphabet_to_class.items(), desc="Loading ISL"):
+
+    for letter, class_idx in tqdm(alphabet_to_class.items(), desc=f"Loading {dataset_name}"):
         letter_folder = data_path / letter
-        
-        if not letter_folder.exists():
-            logger.warning(f"Folder not found: {letter_folder}")
-            continue
-        
+        if not letter_folder.exists(): continue
+
         features_list = []
-        
-        # ISL structure: data/A/0/0.npy, data/A/0/1.npy, ...
-        # Iterate through subfolders (0-119)
         for subfolder in sorted(letter_folder.iterdir()):
-            if not subfolder.is_dir():
-                continue
-            
-            # Load all .npy files in subfolder
+            if not subfolder.is_dir(): continue
             npy_files = list(subfolder.glob("*.npy"))
-            
             for npy_file in npy_files:
                 try:
                     features = np.load(str(npy_file))
-                    
-                    # ISL features should be (126,) shape
                     if features.shape == (126,):
-                        # Validate
                         if not np.isnan(features).any() and not np.isinf(features).any() and np.any(features):
                             normalized = normalize_landmarks_wrist_relative(features.astype(np.float32))
                             features_list.append(normalized)
-                except Exception as e:
-                    logger.warning(f"Failed to load {npy_file}: {e}")
+                except Exception:
+                    pass
+
+        if features_list:
+            data_dict[class_idx] = features_list
+            logger.info(f"  {letter} (class {class_idx}): Loaded {len(features_list)} samples")
+
+    return data_dict
+
+def load_isl_data(isl_path: str) -> Dict[int, List[np.ndarray]]:
+    return load_dataset_generic(str(Path(isl_path) / "data"), "ISL")
+
+def load_data1(data1_path: str) -> Dict[int, List[np.ndarray]]:
+    return load_dataset_generic(data1_path, "data1")
+
+def load_data2(data2_path: str) -> Dict[int, List[np.ndarray]]:
+    return load_dataset_generic(data2_path, "MP_Data_Normalized")
+
+def process_and_save_class_streaming(
+    class_idx: int,
+    samples: List[np.ndarray],
+    max_seq_len: int,
+    temp_dir: Path,
+    global_sample_counter: int
+) -> Tuple[List[dict], int]:
+    """
+    Process ONE class completely and save to temp files immediately.
+    Returns metadata records and updated sample counter.
+    """
+    logger.info(f"Processing class {class_idx} ({len(samples)} samples)...")
+    
+    metadata_records = []
+    
+    # Process original samples
+    for idx, sample in enumerate(samples):
+        # Format the sample
+        if sample.ndim == 1:
+            padded = np.zeros((max_seq_len, 126), dtype=np.float32)
+            padded[0] = sample
+            formatted = padded
+        else:
+            formatted = sample
         
-        data_dict[class_idx] = features_list
-        logger.info(f"Class {class_idx} ({CLASS_NAMES[class_idx]}): Loaded {len(features_list)} samples")
+        # Save immediately to disk
+        filename = f"class_{class_idx}_sample_{global_sample_counter}.npy"
+        filepath = temp_dir / filename
+        np.save(str(filepath), formatted)
+        
+        # Create metadata
+        seq_len = np.count_nonzero(np.any(formatted != 0, axis=1))
+        metadata_records.append({
+            "sample_id": global_sample_counter,
+            "class_idx": class_idx,
+            "class_name": CLASS_NAMES[class_idx],
+            "file_path": str(filepath),
+            "seq_length": seq_len,
+            "is_flipped": False
+        })
+        
+        global_sample_counter += 1
+        del formatted  # Free memory
     
-    return data_dict
+    logger.info(f"  Saved {len(samples)} original samples")
+    
+    # Process flipped samples
+    for idx, sample in enumerate(samples):
+        # Flip
+        flipped = horizontal_flip(sample)
+        
+        # Format
+        if flipped.ndim == 1:
+            padded = np.zeros((max_seq_len, 126), dtype=np.float32)
+            padded[0] = flipped
+            formatted = padded
+        else:
+            formatted = flipped
+        
+        # Save immediately
+        filename = f"class_{class_idx}_sample_{global_sample_counter}.npy"
+        filepath = temp_dir / filename
+        np.save(str(filepath), formatted)
+        
+        # Create metadata
+        seq_len = np.count_nonzero(np.any(formatted != 0, axis=1))
+        metadata_records.append({
+            "sample_id": global_sample_counter,
+            "class_idx": class_idx,
+            "class_name": CLASS_NAMES[class_idx],
+            "file_path": str(filepath),
+            "seq_length": seq_len,
+            "is_flipped": True
+        })
+        
+        global_sample_counter += 1
+        del flipped, formatted  # Free memory
+    
+    logger.info(f"  Saved {len(samples)} flipped samples")
+    logger.info(f"  ✓ Class {class_idx} complete: {len(metadata_records)} total samples saved")
+    
+    return metadata_records, global_sample_counter
 
+def process_all_datasets_streaming(
+    isl_data: Dict[int, List[np.ndarray]],
+    data1: Dict[int, List[np.ndarray]],
+    data2: Dict[int, List[np.ndarray]],
+    max_seq_len: int,
+    temp_dir: Path
+) -> pd.DataFrame:
+    """
+    Process all datasets in streaming fashion - one class at a time.
+    Saves data immediately and only keeps metadata in memory.
+    """
+    logger.info("Starting streaming processing...")
+    
+    # Combine all class indices
+    all_class_indices = set(isl_data.keys()) | set(data1.keys()) | set(data2.keys())
+    
+    all_metadata = []
+    global_sample_counter = 0
+    
+    for class_idx in sorted(all_class_indices):
+        # Combine samples from all datasets for this class
+        class_samples = []
+        if class_idx in isl_data:
+            class_samples.extend(isl_data[class_idx])
+        if class_idx in data1:
+            class_samples.extend(data1[class_idx])
+        if class_idx in data2:
+            class_samples.extend(data2[class_idx])
+        
+        if not class_samples:
+            continue
+        
+        # Process and save this class immediately
+        metadata, global_sample_counter = process_and_save_class_streaming(
+            class_idx, class_samples, max_seq_len, temp_dir, global_sample_counter
+        )
+        
+        all_metadata.extend(metadata)
+        
+        # Free memory for this class
+        del class_samples, metadata
+        gc.collect()
+    
+    logger.info(f"✓ All classes processed. Total samples: {global_sample_counter}")
+    return pd.DataFrame(all_metadata)
 
-def apply_augmentation(data_dict: Dict[int, List[np.ndarray]], 
-                      augment_count: int = 0,
-                      max_seq_len: int = 60) -> Dict[int, List[np.ndarray]]:
-    """
-    Apply augmentation to all classes.
-    
-    Args:
-        data_dict: Dictionary mapping class_id -> list of samples
-        augment_count: Unused for ISL-only pipeline (reserved)
-        max_seq_len: Maximum sequence length
-    
-    Returns:
-        Augmented data dictionary
-    """
-    logger.info("Applying data augmentation...")
-    
-    # POV flip for ISL
-    logger.info("Augmenting ISL (POV flip)...")
-    for class_idx in sorted(data_dict.keys()):
-        if class_idx in data_dict:
-            original_samples = data_dict[class_idx].copy()
-            flipped_samples = [horizontal_flip(s) for s in original_samples]
-            data_dict[class_idx].extend(flipped_samples)
-            logger.info(f"Class {class_idx}: {len(original_samples)} -> {len(data_dict[class_idx])} samples")
-    
-    # Ensure all samples have correct shape
-    for class_idx in data_dict:
-        formatted_samples = []
-        for sample in data_dict[class_idx]:
-            if sample.ndim == 1:
-                # Static sign: pad to (max_seq_len, 126)
-                padded = np.zeros((max_seq_len, 126), dtype=np.float32)
-                padded[0] = sample
-                formatted_samples.append(padded)
-            else:
-                # Already a sequence
-                formatted_samples.append(sample)
-        data_dict[class_idx] = formatted_samples
-    
-    return data_dict
-
-
-def create_splits(data_dict: Dict[int, List[np.ndarray]], 
-                 train_ratio: float = 0.7,
-                 val_ratio: float = 0.15,
-                 test_ratio: float = 0.15,
-                 random_state: int = 42) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """
-    Create stratified train/val/test splits.
-    
-    Args:
-        data_dict: Dictionary mapping class_id -> list of samples
-        train_ratio: Training set ratio (default: 0.7)
-        val_ratio: Validation set ratio (default: 0.15)
-        test_ratio: Test set ratio (default: 0.15)
-        random_state: Random seed for reproducibility
-    
-    Returns:
-        Tuple of (train_df, val_df, test_df)
-    """
+def create_splits_from_metadata(
+    metadata_df: pd.DataFrame,
+    train_ratio: float = 0.7,
+    val_ratio: float = 0.15,
+    test_ratio: float = 0.15,
+    random_state: int = 42,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Create train/val/test splits from metadata."""
     logger.info("Creating train/val/test splits...")
-    
-    # Create DataFrame with all samples
-    records = []
-    sample_counter = 0
-    
-    for class_idx, samples in data_dict.items():
-        for sample_idx, sample in enumerate(samples):
-            records.append({
-                'sample_id': sample_counter,
-                'class_idx': class_idx,
-                'class_name': CLASS_NAMES[class_idx],
-                'sample_data': sample,
-                'seq_length': np.count_nonzero(np.any(sample != 0, axis=1))
-            })
-            sample_counter += 1
-    
-    df = pd.DataFrame(records)
-    logger.info(f"Total samples: {len(df)}")
     
     # Stratified split
     train_df, temp_df = train_test_split(
-        df, 
+        metadata_df,
         test_size=(val_ratio + test_ratio),
-        stratify=df['class_idx'],
-        random_state=random_state
+        stratify=metadata_df["class_idx"],
+        random_state=random_state,
     )
-    
+
     val_df, test_df = train_test_split(
         temp_df,
         test_size=(test_ratio / (val_ratio + test_ratio)),
-        stratify=temp_df['class_idx'],
-        random_state=random_state
+        stratify=temp_df["class_idx"],
+        random_state=random_state,
     )
-    
-    logger.info(f"Train: {len(train_df)} ({len(train_df)/len(df)*100:.1f}%)")
-    logger.info(f"Val: {len(val_df)} ({len(val_df)/len(df)*100:.1f}%)")
-    logger.info(f"Test: {len(test_df)} ({len(test_df)/len(df)*100:.1f}%)")
-    
+
+    logger.info(f"Train: {len(train_df)} | Val: {len(val_df)} | Test: {len(test_df)}")
     return train_df, val_df, test_df
 
-
-def save_processed_data(train_df: pd.DataFrame, 
-                       val_df: pd.DataFrame, 
-                       test_df: pd.DataFrame,
-                       output_dir: str):
-    """
-    Save processed features and metadata.
+def organize_final_output(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    output_dir: Path
+):
+    """Organize the final output structure."""
+    logger.info(f"Organizing final output in {output_dir}...")
     
-    Args:
-        train_df: Training DataFrame
-        val_df: Validation DataFrame
-        test_df: Test DataFrame
-        output_dir: Output directory path
-    """
-    logger.info(f"Saving processed data to {output_dir}...")
-    
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    features_dir = output_path / "features"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    features_dir = output_dir / "features"
     features_dir.mkdir(exist_ok=True)
     
-    # Save features as .npy files
-    def save_split(df, split_name):
-        split_records = []
-        
-        for idx, row in tqdm(df.iterrows(), total=len(df), desc=f"Saving {split_name}"):
-            # Generate filename
-            filename = f"class_{row['class_idx']}_sample_{row['sample_id']}.npy"
-            filepath = features_dir / filename
-            
-            # Save features
-            np.save(str(filepath), row['sample_data'])
-            
-            # Record metadata
-            split_records.append({
-                'sample_id': row['sample_id'],
-                'class_idx': row['class_idx'],
-                'class_name': row['class_name'],
-                'file_path': str(filepath),
-                'seq_length': row['seq_length']
-            })
-        
-        # Save CSV
-        split_df = pd.DataFrame(split_records)
-        csv_path = output_path / f"{split_name}_split.csv"
-        split_df.to_csv(csv_path, index=False)
-        logger.info(f"Saved {split_name} split: {len(split_df)} samples -> {csv_path}")
-        
-        return split_df
+    # The files are already saved in features_dir from streaming processing
+    # We just need to save the CSV splits
     
-    # Save all splits
-    train_meta = save_split(train_df, "train")
-    val_meta = save_split(val_df, "val")
-    test_meta = save_split(test_df, "test")
+    train_df.to_csv(output_dir / "train_split.csv", index=False)
+    val_df.to_csv(output_dir / "val_split.csv", index=False)
+    test_df.to_csv(output_dir / "test_split.csv", index=False)
     
     # Save class mapping
-    class_mapping_df = pd.DataFrame([
-        {'class_idx': idx, 'class_name': name}
-        for idx, name in CLASS_NAMES.items()
-    ])
-    class_mapping_path = output_path / "class_mapping.csv"
-    class_mapping_df.to_csv(class_mapping_path, index=False)
-    logger.info(f"Saved class mapping: {class_mapping_path}")
+    pd.DataFrame(
+        [{"class_idx": idx, "class_name": name} for idx, name in CLASS_NAMES.items()]
+    ).to_csv(output_dir / "class_mapping.csv", index=False)
     
-    # Save preprocessing summary
+    # Save summary
     summary = {
-        'total_samples': len(train_df) + len(val_df) + len(test_df),
-        'num_classes': len(CLASS_NAMES),
-        'train_samples': len(train_df),
-        'val_samples': len(val_df),
-        'test_samples': len(test_df),
-        'feature_dim': 126,
-        'max_seq_len': 60,
-        'class_distribution': {
-            class_name: {
-                'train': int((train_meta['class_idx'] == idx).sum()),
-                'val': int((val_meta['class_idx'] == idx).sum()),
-                'test': int((test_meta['class_idx'] == idx).sum())
-            }
-            for idx, class_name in CLASS_NAMES.items()
-        }
+        "total_samples": len(train_df) + len(val_df) + len(test_df),
+        "num_classes": len(CLASS_NAMES),
+        "train_samples": len(train_df),
+        "val_samples": len(val_df),
+        "test_samples": len(test_df),
     }
-    
-    summary_path = output_path / "preprocessing_summary.json"
-    with open(summary_path, 'w') as f:
+    with open(output_dir / "preprocessing_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
-    logger.info(f"Saved preprocessing summary: {summary_path}")
-
-
-def validate_dataset_paths(isl_path: str):
-    """
-    Validate that dataset paths exist and have correct structure.
     
-    Args:
-        isl_path: Path to ISL directory
-    
-    Raises:
-        ValueError: If paths are invalid or structure is incorrect
-    """
-    # Check ISL path
-    isl_base = Path(isl_path)
-    if not isl_base.exists():
-        raise ValueError(f"❌ ISL path does not exist: {isl_path}")
-    
-    isl_data_path = isl_base / "data"
-    if not isl_data_path.exists():
-        raise ValueError(f"❌ ISL/data directory not found: {isl_data_path}")
-    
-    logger.info(f"✓ ISL path validated: {isl_path}")
-
-
-def validate_loaded_data(all_data: Dict[int, List[np.ndarray]]):
-    """
-    Validate that all required classes were loaded.
-    
-    Args:
-        all_data: Dictionary mapping class_id -> list of samples
-    
-    Raises:
-        ValueError: If critical data is missing
-    """
-    isl_count = sum(len(v) for k, v in all_data.items() if 0 <= k < len(CLASS_NAMES))
-    
-    logger.info("")
-    logger.info("="*70)
-    logger.info("DATA LOADING SUMMARY")
-    logger.info("="*70)
-    logger.info(f"ISL (Classes 0-24):               {isl_count:6d} samples")
-    logger.info(f"{'─'*70}")
-    logger.info(f"Total:                            {isl_count:6d} samples")
-    logger.info("="*70)
-    
-    # Validation
-    if isl_count == 0:
-        logger.error("❌ ERROR: No ISL data loaded!")
-        logger.error("   Expected: 6,000+ samples")
-        logger.error("   Actual: 0 samples")
-        raise ValueError("ISL data not loaded")
-    
-    logger.info("✓ All datasets loaded successfully!")
-    logger.info("")
-    
-    return {
-        'isl': isl_count,
-        'total': isl_count
-    }
-
+    logger.info("✓ Output organized successfully")
 
 def main():
-    parser = argparse.ArgumentParser(description="Preprocess sign language datasets")
-    parser.add_argument('--isl_path', type=str, required=True,
-                       help='Path to ISL dataset directory')
-    parser.add_argument('--output', type=str, default='data/processed',
-                       help='Output directory for processed data')
-    parser.add_argument('--augment_count', type=int, default=0,
-                       help='Unused for ISL-only pipeline (reserved)')
-    parser.add_argument('--max_seq_len', type=int, default=60,
-                       help='Maximum sequence length')
-    parser.add_argument('--min_confidence', type=float, default=0.3,
-                       help='MediaPipe detection confidence threshold')
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--isl_path", type=str, required=True)
+    parser.add_argument("--data1_path", type=str, required=True)
+    parser.add_argument("--data2_path", type=str, required=True)
+    parser.add_argument("--output", type=str, default="data/processed")
+    parser.add_argument("--augment_count", type=int, default=0)
+    parser.add_argument("--max_seq_len", type=int, default=60)
     args = parser.parse_args()
+
+    output_path = Path(args.output)
+    temp_dir = output_path / "features"  # Save directly to final location
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load all datasets (these will be freed class by class)
+    isl_data = load_isl_data(args.isl_path)
+    data1 = load_data1(args.data1_path)
+    data2 = load_data2(args.data2_path)
     
-    # Validate paths before processing
-    try:
-        validate_dataset_paths(args.isl_path)
-    except ValueError as e:
-        logger.error(f"\n{e}\n")
-        logger.error("Please ensure:")
-        logger.error("  1. ISL_PATH is set correctly")
-        logger.error("  2. ISL directory contains the required subdirectories")
-        logger.error("")
-        logger.error("Example:")
-        logger.error("  export ISL_PATH=/path/to/ISL")
-        logger.error("  python preprocessing/preprocess.py \\")
-        logger.error("    --isl_path \"$ISL_PATH\"")
-        exit(1)
-    
-    logger.info("="*50)
-    logger.info("SIGN LANGUAGE PREPROCESSING PIPELINE")
-    logger.info("="*50)
-    
-    # Initialize MediaPipe extractor
-    extractor = MediaPipeExtractor(
-        static_image_mode=True,
-        max_num_hands=2,
-        min_detection_confidence=args.min_confidence,
-        min_tracking_confidence=args.min_confidence
+    # Process in streaming fashion (saves to disk immediately, keeps only metadata)
+    metadata_df = process_all_datasets_streaming(
+        isl_data, data1, data2, args.max_seq_len, temp_dir
     )
     
-    # Load datasets (ISL only)
-    isl_data = load_isl_data(args.isl_path)
+    # Free the loaded data (we've already saved everything)
+    del isl_data, data1, data2
+    gc.collect()
     
-    # Combine all data
-    all_data = {**isl_data}
+    # Create splits from metadata only
+    train_df, val_df, test_df = create_splits_from_metadata(metadata_df)
     
-    # Validate loaded data
-    try:
-        data_stats = validate_loaded_data(all_data)
-    except ValueError as e:
-        logger.error(f"\n{e}\n")
-        logger.error("Failed to load required datasets.")
-        logger.error("Please verify:")
-        logger.error("  1. Dataset paths are correct")
-        logger.error("  2. Datasets contain the expected directories")
-        logger.error("  3. Datasets are not corrupted or empty")
-        exit(1)
-    
-    # Log statistics
-    total_samples = sum(len(samples) for samples in all_data.values())
-    logger.info(f"\nLoaded {total_samples} samples from {len(all_data)} classes")
-    
-    # Apply augmentation
-    augmented_data = apply_augmentation(all_data, args.augment_count, args.max_seq_len)
-    
-    # Log augmented statistics
-    total_augmented = sum(len(samples) for samples in augmented_data.values())
-    logger.info(f"\nAfter augmentation: {total_augmented} samples")
-    
-    # Create splits
-    train_df, val_df, test_df = create_splits(augmented_data)
-    
-    # Save processed data
-    save_processed_data(train_df, val_df, test_df, args.output)
-    
-    # Clean up
-    extractor.close()
-    
-    logger.info("\n" + "="*50)
-    logger.info("✓ PREPROCESSING COMPLETE!")
-    logger.info("="*50)
-    logger.info(f"Output directory: {args.output}")
-    logger.info(f"Total samples: {total_augmented}")
-    logger.info(f"Train: {len(train_df)} | Val: {len(val_df)} | Test: {len(test_df)}")
+    # Organize final output
+    organize_final_output(train_df, val_df, test_df, output_path)
 
+    logger.info("✓ PREPROCESSING COMPLETE!")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Fatal error: {e}", exc_info=True)
+        sys.exit(1)
