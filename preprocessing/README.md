@@ -20,19 +20,23 @@ Main preprocessing script that orchestrates the entire pipeline.
 **Usage:**
 # Preprocessing Module
 
-This module handles preprocessing of the ISL dataset.
+This module handles preprocessing of multiple sign language datasets (ISL, data1, MP_Data_Normalized).
 
 ## Usage
 
 ```bash
 python preprocessing/preprocess.py \
     --isl_path /path/to/ISL \
+    --data1_path ./data1/MP_Data_Normalized \
+    --data2_path ./MP_Data_Normalized \
     --output data/processed
 ```
 
 ## Arguments
 
-- `--isl_path`: Path to ISL dataset directory
+- `--isl_path`: Path to ISL dataset directory (required)
+- `--data1_path`: Path to data1/MP_Data_Normalized directory (required)
+- `--data2_path`: Path to MP_Data_Normalized directory (required)
 - `--output`: Output directory for processed data (default: `data/processed`)
 - `--augment_count`: Unused for ISL-only pipeline (reserved)
 - `--max_seq_len`: Maximum sequence length (default: 60)
@@ -40,12 +44,14 @@ python preprocessing/preprocess.py \
 
 ## Preprocessing Steps
 
-1. Load ISL dataset
-2. Extract MediaPipe hand landmarks
-3. Apply wrist-relative normalization
-4. Apply POV flip augmentation
-5. Create train/val/test splits
-6. Save processed features
+1. Load all three datasets (ISL, data1, MP_Data_Normalized)
+2. Exclude letter R (not available in ISL dataset)
+3. Extract MediaPipe hand landmarks
+4. Apply wrist-relative normalization
+5. Combine all datasets
+6. Apply POV flip augmentation
+7. Create train/val/test splits
+8. Save processed features
 
 ## Data Augmentation
 
@@ -53,7 +59,8 @@ python preprocessing/preprocess.py \
 
 ## Class Distribution
 
-- ISL (Classes 0-24)
+- Classes 0-24 (A-Z excluding R, 25 total letters)
+- Data from 3 different datasets combined
 
 ## MediaPipe Settings
 
@@ -79,7 +86,7 @@ data/processed/
 ├── features/
 │   ├── class_0_sample_0.npy       # (60, 126)
 │   ├── class_0_sample_1.npy
-│   └── ... (~27,700+ files)
+│   └── ... (combined samples from all 3 datasets)
 ├── train_split.csv
 ├── val_split.csv
 ├── test_split.csv
@@ -91,7 +98,7 @@ data/processed/
 
 **Split CSV columns:**
 - `sample_id`: Unique sample identifier
-- `class_idx`: Class index (0-24)
+- `class_idx`: Class index (0-24, excluding R)
 - `class_name`: Human-readable class name
 - `file_path`: Path to .npy feature file
 - `seq_length`: Number of valid frames in sequence
@@ -141,6 +148,14 @@ Approximate processing times (varies by hardware):
 **Solution**:
 - Use weighted cross-entropy loss during training
 - Class weights calculated as: `total / (num_classes * class_count)`
+
+### Issue 3: Letter R Exclusion
+**Problem**: Letter R is not available in the ISL dataset.
+
+**Solution**:
+- Automatically skip letter R during loading
+- Total classes reduced to 25 (A-Z excluding R)
+- Class indices: A=0, B=1, ..., Q=16, S=17, ..., Z=24
 
 ## Troubleshooting
 
