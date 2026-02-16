@@ -115,6 +115,9 @@ def process_and_save_class_streaming(
         else:
             formatted = sample
         
+        # Ensure wrist-relative normalization before saving
+        formatted = normalize_landmarks_wrist_relative(formatted.astype(np.float32))
+
         # Save immediately to disk
         filename = f"class_{class_idx}_sample_{global_sample_counter}.npy"
         filepath = temp_dir / filename
@@ -149,6 +152,9 @@ def process_and_save_class_streaming(
         else:
             formatted = flipped
         
+        # Ensure wrist-relative normalization after flip
+        formatted = normalize_landmarks_wrist_relative(formatted.astype(np.float32))
+
         # Save immediately
         filename = f"class_{class_idx}_sample_{global_sample_counter}.npy"
         filepath = temp_dir / filename
