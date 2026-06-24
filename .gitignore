@@ -40,11 +40,11 @@ include50_word_samples.zip
 # Model Checkpoints
 checkpoints/*.pth
 checkpoints/*.pt
-!checkpoints/mspt/*.pt
-!weights/yolo26/*.pt
 !checkpoints/README.md
 *.pth
 *.pt
+!checkpoints/mspt/*.pt
+!weights/yolo26/*.pt
 
 # Results
 results/*.png
