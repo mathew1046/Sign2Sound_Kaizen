@@ -1,0 +1,1 @@
+"""Collection dashboard FastAPI server."""
