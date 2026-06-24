@@ -1,0 +1,17 @@
+{
+  "word": "bad",
+  "stem": "MVI_9435",
+  "video": "/vol/input/Adjectives/95. bad/MVI_9435.MOV",
+  "frames": 46,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 6.18,
+  "fps_processed": 7.44
+}

@@ -1,0 +1,17 @@
+{
+  "word": "ball",
+  "stem": "MVI_4325",
+  "video": "/vol/input/Society/19. Ball/MVI_4325.MOV",
+  "frames": 47,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 6.122,
+  "fps_processed": 7.68
+}

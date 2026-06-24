@@ -1,0 +1,13 @@
+{
+  "word": "paint",
+  "stem": "MVI_4928",
+  "video": "/vol/input/Home/40. Paint/MVI_4928.MOV",
+  "frames": 57,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

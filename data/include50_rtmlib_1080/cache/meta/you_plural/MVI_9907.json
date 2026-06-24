@@ -1,0 +1,13 @@
+{
+  "word": "you_plural",
+  "stem": "MVI_9907",
+  "video": "/vol/input/Pronouns/46. you (plural)/MVI_9907.MOV",
+  "frames": 53,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

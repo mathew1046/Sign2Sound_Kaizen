@@ -1,0 +1,17 @@
+{
+  "word": "grandfather",
+  "stem": "MVI_4084",
+  "video": "/vol/input/People/69. Grandfather/MVI_4084.MOV",
+  "frames": 103,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 13.405,
+  "fps_processed": 7.68
+}

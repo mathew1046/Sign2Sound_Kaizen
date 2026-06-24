@@ -1,0 +1,13 @@
+{
+  "word": "election",
+  "stem": "MVI_4839",
+  "video": "/vol/input/Society/14. Election/MVI_4839.MOV",
+  "frames": 73,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

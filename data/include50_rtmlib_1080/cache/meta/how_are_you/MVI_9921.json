@@ -1,0 +1,17 @@
+{
+  "word": "how_are_you",
+  "stem": "MVI_9921",
+  "video": "/vol/input/Greetings/49. How are you/MVI_9921.MOV",
+  "frames": 65,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 8.59,
+  "fps_processed": 7.57
+}

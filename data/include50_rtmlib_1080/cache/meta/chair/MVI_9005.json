@@ -1,0 +1,17 @@
+{
+  "word": "chair",
+  "stem": "MVI_9005",
+  "video": "/vol/input/Home/25. Chair/MVI_9005.MP4",
+  "frames": 47,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 6.417,
+  "fps_processed": 7.32
+}

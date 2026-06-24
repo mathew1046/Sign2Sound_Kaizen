@@ -1,0 +1,13 @@
+{
+  "word": "train_ticket",
+  "stem": "MVI_3196",
+  "video": "/vol/input/Means_of_Transportation/16. train ticket/MVI_3196.MOV",
+  "frames": 102,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

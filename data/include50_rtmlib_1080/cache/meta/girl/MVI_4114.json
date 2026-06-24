@@ -1,0 +1,13 @@
+{
+  "word": "girl",
+  "stem": "MVI_4114",
+  "video": "/vol/input/People/78. Girl/MVI_4114.MOV",
+  "frames": 65,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

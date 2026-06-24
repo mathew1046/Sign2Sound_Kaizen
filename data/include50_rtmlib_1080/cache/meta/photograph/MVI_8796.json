@@ -1,0 +1,17 @@
+{
+  "word": "photograph",
+  "stem": "MVI_8796",
+  "video": "/vol/input/Home/35. Photograph/MVI_8796.MP4",
+  "frames": 75,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 9.694,
+  "fps_processed": 7.74
+}

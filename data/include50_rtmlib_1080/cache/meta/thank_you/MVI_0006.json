@@ -1,0 +1,13 @@
+{
+  "word": "thank_you",
+  "stem": "MVI_0006",
+  "video": "/vol/input/Greetings/55. Thank you/MVI_0006.MOV",
+  "frames": 53,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

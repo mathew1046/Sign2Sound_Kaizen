@@ -1,0 +1,17 @@
+{
+  "word": "wide",
+  "stem": "MVI_5119",
+  "video": "/vol/input/Adjectives/81. wide/MVI_5119.MOV",
+  "frames": 68,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 10.271,
+  "fps_processed": 6.62
+}

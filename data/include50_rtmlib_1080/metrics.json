@@ -1,0 +1,1729 @@
+{
+  "run_tag": "include50_rtmlib_1080",
+  "glossary": "all",
+  "backend": "rtmlib",
+  "model": "yolox-x + rtmw-x_384x288",
+  "onnxruntime_gpu": "1.20.2",
+  "device": "cuda",
+  "resolution": "native (no resize)",
+  "fps": "native (all frames, no skip)",
+  "keypoints": "coco_wholebody_133",
+  "n_words_target": 263,
+  "n_words_in_run": 213,
+  "n_clips_processed_this_run": 3315,
+  "n_clips_skipped_this_run": 0,
+  "n_clips_failed_this_run": 0,
+  "n_clips_total_on_volume": 4258,
+  "total_frames_this_run": 213781,
+  "any_hand_frames_this_run": 213781,
+  "any_hand_rate_this_run": 1.0,
+  "median_width": 1920,
+  "median_height": 1080,
+  "per_word_this_run": [
+    {
+      "word": "actor",
+      "label_id": 50,
+      "clips": 14,
+      "frames": 1022,
+      "any_hand_frames": 1022,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "adult",
+      "label_id": 51,
+      "clips": 20,
+      "frames": 1512,
+      "any_hand_frames": 1512,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "afternoon",
+      "label_id": 52,
+      "clips": 14,
+      "frames": 686,
+      "any_hand_frames": 686,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "alive",
+      "label_id": 53,
+      "clips": 8,
+      "frames": 426,
+      "any_hand_frames": 426,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "alright",
+      "label_id": 54,
+      "clips": 21,
+      "frames": 1417,
+      "any_hand_frames": 1417,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "animal",
+      "label_id": 55,
+      "clips": 20,
+      "frames": 1997,
+      "any_hand_frames": 1997,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "artist",
+      "label_id": 56,
+      "clips": 14,
+      "frames": 941,
+      "any_hand_frames": 941,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "attack",
+      "label_id": 57,
+      "clips": 15,
+      "frames": 1173,
+      "any_hand_frames": 1173,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "author",
+      "label_id": 58,
+      "clips": 14,
+      "frames": 1529,
+      "any_hand_frames": 1529,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "baby",
+      "label_id": 59,
+      "clips": 20,
+      "frames": 1230,
+      "any_hand_frames": 1230,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bad",
+      "label_id": 60,
+      "clips": 21,
+      "frames": 1071,
+      "any_hand_frames": 1071,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bag",
+      "label_id": 61,
+      "clips": 14,
+      "frames": 821,
+      "any_hand_frames": 821,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "ball",
+      "label_id": 62,
+      "clips": 15,
+      "frames": 844,
+      "any_hand_frames": 844,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bathroom",
+      "label_id": 63,
+      "clips": 14,
+      "frames": 953,
+      "any_hand_frames": 953,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "beautiful",
+      "label_id": 64,
+      "clips": 8,
+      "frames": 545,
+      "any_hand_frames": 545,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bed",
+      "label_id": 65,
+      "clips": 14,
+      "frames": 909,
+      "any_hand_frames": 909,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bedroom",
+      "label_id": 66,
+      "clips": 14,
+      "frames": 1284,
+      "any_hand_frames": 1284,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bicycle",
+      "label_id": 67,
+      "clips": 20,
+      "frames": 1555,
+      "any_hand_frames": 1555,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bill",
+      "label_id": 68,
+      "clips": 14,
+      "frames": 834,
+      "any_hand_frames": 834,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "blind",
+      "label_id": 69,
+      "clips": 8,
+      "frames": 452,
+      "any_hand_frames": 452,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "blue",
+      "label_id": 70,
+      "clips": 20,
+      "frames": 1158,
+      "any_hand_frames": 1158,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "boat",
+      "label_id": 71,
+      "clips": 21,
+      "frames": 2166,
+      "any_hand_frames": 2166,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "book",
+      "label_id": 72,
+      "clips": 14,
+      "frames": 879,
+      "any_hand_frames": 879,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "box",
+      "label_id": 73,
+      "clips": 14,
+      "frames": 1128,
+      "any_hand_frames": 1128,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "brown",
+      "label_id": 74,
+      "clips": 21,
+      "frames": 1250,
+      "any_hand_frames": 1250,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "bus",
+      "label_id": 75,
+      "clips": 20,
+      "frames": 1685,
+      "any_hand_frames": 1685,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "camera",
+      "label_id": 76,
+      "clips": 14,
+      "frames": 761,
+      "any_hand_frames": 761,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "card",
+      "label_id": 77,
+      "clips": 14,
+      "frames": 998,
+      "any_hand_frames": 998,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "cat",
+      "label_id": 78,
+      "clips": 20,
+      "frames": 1464,
+      "any_hand_frames": 1464,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "chair",
+      "label_id": 79,
+      "clips": 14,
+      "frames": 742,
+      "any_hand_frames": 742,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "cheap",
+      "label_id": 80,
+      "clips": 8,
+      "frames": 502,
+      "any_hand_frames": 502,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "child",
+      "label_id": 81,
+      "clips": 20,
+      "frames": 1100,
+      "any_hand_frames": 1100,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "city",
+      "label_id": 82,
+      "clips": 20,
+      "frames": 1374,
+      "any_hand_frames": 1374,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "clean",
+      "label_id": 83,
+      "clips": 8,
+      "frames": 508,
+      "any_hand_frames": 508,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "clock",
+      "label_id": 84,
+      "clips": 13,
+      "frames": 971,
+      "any_hand_frames": 971,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "clothing",
+      "label_id": 85,
+      "clips": 20,
+      "frames": 1186,
+      "any_hand_frames": 1186,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "cold",
+      "label_id": 86,
+      "clips": 20,
+      "frames": 1114,
+      "any_hand_frames": 1114,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "colour",
+      "label_id": 87,
+      "clips": 20,
+      "frames": 1083,
+      "any_hand_frames": 1083,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "computer",
+      "label_id": 88,
+      "clips": 14,
+      "frames": 1028,
+      "any_hand_frames": 1028,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "cool",
+      "label_id": 89,
+      "clips": 21,
+      "frames": 1140,
+      "any_hand_frames": 1140,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "crowd",
+      "label_id": 90,
+      "clips": 20,
+      "frames": 1157,
+      "any_hand_frames": 1157,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "curved",
+      "label_id": 91,
+      "clips": 8,
+      "frames": 588,
+      "any_hand_frames": 588,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "daughter",
+      "label_id": 92,
+      "clips": 20,
+      "frames": 1189,
+      "any_hand_frames": 1189,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "dead",
+      "label_id": 93,
+      "clips": 8,
+      "frames": 426,
+      "any_hand_frames": 426,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "deaf",
+      "label_id": 94,
+      "clips": 8,
+      "frames": 450,
+      "any_hand_frames": 450,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "deep",
+      "label_id": 95,
+      "clips": 8,
+      "frames": 527,
+      "any_hand_frames": 527,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "dirty",
+      "label_id": 96,
+      "clips": 8,
+      "frames": 543,
+      "any_hand_frames": 543,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "doctor",
+      "label_id": 97,
+      "clips": 14,
+      "frames": 819,
+      "any_hand_frames": 819,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "door",
+      "label_id": 98,
+      "clips": 14,
+      "frames": 877,
+      "any_hand_frames": 877,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "dream",
+      "label_id": 99,
+      "clips": 14,
+      "frames": 1147,
+      "any_hand_frames": 1147,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "dress",
+      "label_id": 100,
+      "clips": 20,
+      "frames": 1154,
+      "any_hand_frames": 1154,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "energy",
+      "label_id": 101,
+      "clips": 14,
+      "frames": 817,
+      "any_hand_frames": 817,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "evening",
+      "label_id": 102,
+      "clips": 14,
+      "frames": 675,
+      "any_hand_frames": 675,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "ex_monsoon",
+      "label_id": 103,
+      "clips": 14,
+      "frames": 783,
+      "any_hand_frames": 783,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "exercise",
+      "label_id": 104,
+      "clips": 14,
+      "frames": 860,
+      "any_hand_frames": 860,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "expensive",
+      "label_id": 105,
+      "clips": 8,
+      "frames": 521,
+      "any_hand_frames": 521,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "extra",
+      "label_id": 106,
+      "clips": 1,
+      "frames": 68,
+      "any_hand_frames": 68,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "family",
+      "label_id": 107,
+      "clips": 17,
+      "frames": 1019,
+      "any_hand_frames": 1019,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "famous",
+      "label_id": 108,
+      "clips": 8,
+      "frames": 420,
+      "any_hand_frames": 420,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "fast",
+      "label_id": 109,
+      "clips": 21,
+      "frames": 1175,
+      "any_hand_frames": 1175,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "female",
+      "label_id": 110,
+      "clips": 8,
+      "frames": 406,
+      "any_hand_frames": 406,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "fish",
+      "label_id": 111,
+      "clips": 20,
+      "frames": 1568,
+      "any_hand_frames": 1568,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "flat",
+      "label_id": 112,
+      "clips": 8,
+      "frames": 511,
+      "any_hand_frames": 511,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "friday",
+      "label_id": 113,
+      "clips": 14,
+      "frames": 785,
+      "any_hand_frames": 785,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "friend",
+      "label_id": 114,
+      "clips": 20,
+      "frames": 1126,
+      "any_hand_frames": 1126,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "gift",
+      "label_id": 115,
+      "clips": 14,
+      "frames": 828,
+      "any_hand_frames": 828,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "god",
+      "label_id": 116,
+      "clips": 14,
+      "frames": 887,
+      "any_hand_frames": 887,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "good_afternoon",
+      "label_id": 117,
+      "clips": 22,
+      "frames": 1485,
+      "any_hand_frames": 1485,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "good_evening",
+      "label_id": 118,
+      "clips": 21,
+      "frames": 1474,
+      "any_hand_frames": 1474,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "good_night",
+      "label_id": 119,
+      "clips": 21,
+      "frames": 1470,
+      "any_hand_frames": 1470,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "grandfather",
+      "label_id": 120,
+      "clips": 17,
+      "frames": 1433,
+      "any_hand_frames": 1433,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "grandmother",
+      "label_id": 121,
+      "clips": 17,
+      "frames": 1357,
+      "any_hand_frames": 1357,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "green",
+      "label_id": 122,
+      "clips": 20,
+      "frames": 1239,
+      "any_hand_frames": 1239,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "grey",
+      "label_id": 123,
+      "clips": 21,
+      "frames": 1327,
+      "any_hand_frames": 1327,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "ground",
+      "label_id": 124,
+      "clips": 20,
+      "frames": 1175,
+      "any_hand_frames": 1175,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "gun",
+      "label_id": 125,
+      "clips": 14,
+      "frames": 797,
+      "any_hand_frames": 797,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "hard",
+      "label_id": 126,
+      "clips": 8,
+      "frames": 514,
+      "any_hand_frames": 514,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "he",
+      "label_id": 127,
+      "clips": 21,
+      "frames": 1400,
+      "any_hand_frames": 1400,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "healthy",
+      "label_id": 128,
+      "clips": 21,
+      "frames": 1303,
+      "any_hand_frames": 1303,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "heavy",
+      "label_id": 129,
+      "clips": 8,
+      "frames": 501,
+      "any_hand_frames": 501,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "high",
+      "label_id": 130,
+      "clips": 8,
+      "frames": 512,
+      "any_hand_frames": 512,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "horse",
+      "label_id": 131,
+      "clips": 20,
+      "frames": 1479,
+      "any_hand_frames": 1479,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "hospital",
+      "label_id": 132,
+      "clips": 20,
+      "frames": 1314,
+      "any_hand_frames": 1314,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "hour",
+      "label_id": 133,
+      "clips": 14,
+      "frames": 785,
+      "any_hand_frames": 785,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "how_are_you",
+      "label_id": 134,
+      "clips": 21,
+      "frames": 1676,
+      "any_hand_frames": 1676,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "husband",
+      "label_id": 135,
+      "clips": 20,
+      "frames": 1247,
+      "any_hand_frames": 1247,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "india",
+      "label_id": 136,
+      "clips": 20,
+      "frames": 1077,
+      "any_hand_frames": 1077,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "job",
+      "label_id": 137,
+      "clips": 14,
+      "frames": 876,
+      "any_hand_frames": 876,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "key",
+      "label_id": 138,
+      "clips": 14,
+      "frames": 784,
+      "any_hand_frames": 784,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "king",
+      "label_id": 139,
+      "clips": 20,
+      "frames": 1235,
+      "any_hand_frames": 1235,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "kitchen",
+      "label_id": 140,
+      "clips": 14,
+      "frames": 995,
+      "any_hand_frames": 995,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "lamp",
+      "label_id": 141,
+      "clips": 14,
+      "frames": 876,
+      "any_hand_frames": 876,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "laptop",
+      "label_id": 142,
+      "clips": 14,
+      "frames": 948,
+      "any_hand_frames": 948,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "lawyer",
+      "label_id": 143,
+      "clips": 14,
+      "frames": 806,
+      "any_hand_frames": 806,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "letter",
+      "label_id": 144,
+      "clips": 14,
+      "frames": 953,
+      "any_hand_frames": 953,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "library",
+      "label_id": 145,
+      "clips": 20,
+      "frames": 1399,
+      "any_hand_frames": 1399,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "light",
+      "label_id": 146,
+      "clips": 8,
+      "frames": 482,
+      "any_hand_frames": 482,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "location",
+      "label_id": 147,
+      "clips": 20,
+      "frames": 1161,
+      "any_hand_frames": 1161,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "lock",
+      "label_id": 148,
+      "clips": 14,
+      "frames": 798,
+      "any_hand_frames": 798,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "loose",
+      "label_id": 149,
+      "clips": 8,
+      "frames": 547,
+      "any_hand_frames": 547,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "low",
+      "label_id": 150,
+      "clips": 8,
+      "frames": 470,
+      "any_hand_frames": 470,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "male",
+      "label_id": 151,
+      "clips": 8,
+      "frames": 500,
+      "any_hand_frames": 500,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "man",
+      "label_id": 152,
+      "clips": 20,
+      "frames": 1123,
+      "any_hand_frames": 1123,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "manager",
+      "label_id": 153,
+      "clips": 14,
+      "frames": 1240,
+      "any_hand_frames": 1240,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "market",
+      "label_id": 154,
+      "clips": 20,
+      "frames": 1138,
+      "any_hand_frames": 1138,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "marriage",
+      "label_id": 155,
+      "clips": 14,
+      "frames": 834,
+      "any_hand_frames": 834,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "mean",
+      "label_id": 156,
+      "clips": 8,
+      "frames": 453,
+      "any_hand_frames": 453,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "medicine",
+      "label_id": 157,
+      "clips": 14,
+      "frames": 947,
+      "any_hand_frames": 947,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "minute",
+      "label_id": 158,
+      "clips": 14,
+      "frames": 726,
+      "any_hand_frames": 726,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "money",
+      "label_id": 159,
+      "clips": 14,
+      "frames": 785,
+      "any_hand_frames": 785,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "month",
+      "label_id": 160,
+      "clips": 14,
+      "frames": 702,
+      "any_hand_frames": 702,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "morning",
+      "label_id": 161,
+      "clips": 14,
+      "frames": 694,
+      "any_hand_frames": 694,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "mother",
+      "label_id": 162,
+      "clips": 20,
+      "frames": 1123,
+      "any_hand_frames": 1123,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "mouse",
+      "label_id": 163,
+      "clips": 20,
+      "frames": 1491,
+      "any_hand_frames": 1491,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "narrow",
+      "label_id": 164,
+      "clips": 21,
+      "frames": 1253,
+      "any_hand_frames": 1253,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "neighbour",
+      "label_id": 165,
+      "clips": 20,
+      "frames": 1261,
+      "any_hand_frames": 1261,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "newspaper",
+      "label_id": 166,
+      "clips": 14,
+      "frames": 983,
+      "any_hand_frames": 983,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "nice",
+      "label_id": 167,
+      "clips": 4,
+      "frames": 231,
+      "any_hand_frames": 231,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "night",
+      "label_id": 168,
+      "clips": 15,
+      "frames": 746,
+      "any_hand_frames": 746,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "office",
+      "label_id": 169,
+      "clips": 20,
+      "frames": 1122,
+      "any_hand_frames": 1122,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "old",
+      "label_id": 170,
+      "clips": 21,
+      "frames": 1152,
+      "any_hand_frames": 1152,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "orange",
+      "label_id": 171,
+      "clips": 20,
+      "frames": 1166,
+      "any_hand_frames": 1166,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "page",
+      "label_id": 172,
+      "clips": 14,
+      "frames": 1187,
+      "any_hand_frames": 1187,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "pant",
+      "label_id": 173,
+      "clips": 20,
+      "frames": 1161,
+      "any_hand_frames": 1161,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "paper",
+      "label_id": 174,
+      "clips": 14,
+      "frames": 896,
+      "any_hand_frames": 896,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "parent",
+      "label_id": 175,
+      "clips": 20,
+      "frames": 1438,
+      "any_hand_frames": 1438,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "park",
+      "label_id": 176,
+      "clips": 20,
+      "frames": 1190,
+      "any_hand_frames": 1190,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "patient",
+      "label_id": 177,
+      "clips": 14,
+      "frames": 992,
+      "any_hand_frames": 992,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "peace",
+      "label_id": 178,
+      "clips": 14,
+      "frames": 987,
+      "any_hand_frames": 987,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "pencil",
+      "label_id": 179,
+      "clips": 14,
+      "frames": 819,
+      "any_hand_frames": 819,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "photograph",
+      "label_id": 180,
+      "clips": 14,
+      "frames": 937,
+      "any_hand_frames": 937,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "pink",
+      "label_id": 181,
+      "clips": 20,
+      "frames": 1167,
+      "any_hand_frames": 1167,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "plane",
+      "label_id": 182,
+      "clips": 21,
+      "frames": 1518,
+      "any_hand_frames": 1518,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "player",
+      "label_id": 183,
+      "clips": 20,
+      "frames": 1275,
+      "any_hand_frames": 1275,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "pleased",
+      "label_id": 184,
+      "clips": 21,
+      "frames": 1317,
+      "any_hand_frames": 1317,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "pocket",
+      "label_id": 185,
+      "clips": 20,
+      "frames": 1222,
+      "any_hand_frames": 1222,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "police",
+      "label_id": 186,
+      "clips": 14,
+      "frames": 800,
+      "any_hand_frames": 800,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "poor",
+      "label_id": 187,
+      "clips": 8,
+      "frames": 519,
+      "any_hand_frames": 519,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "president",
+      "label_id": 188,
+      "clips": 20,
+      "frames": 1235,
+      "any_hand_frames": 1235,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "price",
+      "label_id": 189,
+      "clips": 14,
+      "frames": 901,
+      "any_hand_frames": 901,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "queen",
+      "label_id": 190,
+      "clips": 20,
+      "frames": 1194,
+      "any_hand_frames": 1194,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "race_ethnicity",
+      "label_id": 191,
+      "clips": 14,
+      "frames": 929,
+      "any_hand_frames": 929,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "radio",
+      "label_id": 192,
+      "clips": 14,
+      "frames": 751,
+      "any_hand_frames": 751,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "religion",
+      "label_id": 193,
+      "clips": 14,
+      "frames": 1659,
+      "any_hand_frames": 1659,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "reporter",
+      "label_id": 194,
+      "clips": 14,
+      "frames": 916,
+      "any_hand_frames": 916,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "restaurant",
+      "label_id": 195,
+      "clips": 20,
+      "frames": 1174,
+      "any_hand_frames": 1174,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "rich",
+      "label_id": 196,
+      "clips": 8,
+      "frames": 483,
+      "any_hand_frames": 483,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "ring",
+      "label_id": 197,
+      "clips": 14,
+      "frames": 875,
+      "any_hand_frames": 875,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "sad",
+      "label_id": 198,
+      "clips": 8,
+      "frames": 523,
+      "any_hand_frames": 523,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "saturday",
+      "label_id": 199,
+      "clips": 14,
+      "frames": 784,
+      "any_hand_frames": 784,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "school",
+      "label_id": 200,
+      "clips": 20,
+      "frames": 1168,
+      "any_hand_frames": 1168,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "science",
+      "label_id": 201,
+      "clips": 14,
+      "frames": 880,
+      "any_hand_frames": 880,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "screen",
+      "label_id": 202,
+      "clips": 14,
+      "frames": 904,
+      "any_hand_frames": 904,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "season",
+      "label_id": 203,
+      "clips": 14,
+      "frames": 1619,
+      "any_hand_frames": 1619,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "second",
+      "label_id": 204,
+      "clips": 15,
+      "frames": 1015,
+      "any_hand_frames": 1015,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "secretary",
+      "label_id": 205,
+      "clips": 14,
+      "frames": 965,
+      "any_hand_frames": 965,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "shallow",
+      "label_id": 206,
+      "clips": 8,
+      "frames": 792,
+      "any_hand_frames": 792,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "she",
+      "label_id": 207,
+      "clips": 21,
+      "frames": 1411,
+      "any_hand_frames": 1411,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "shirt",
+      "label_id": 208,
+      "clips": 20,
+      "frames": 1622,
+      "any_hand_frames": 1622,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "sick",
+      "label_id": 209,
+      "clips": 21,
+      "frames": 1256,
+      "any_hand_frames": 1256,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "sign",
+      "label_id": 210,
+      "clips": 14,
+      "frames": 813,
+      "any_hand_frames": 813,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "sister",
+      "label_id": 211,
+      "clips": 20,
+      "frames": 1166,
+      "any_hand_frames": 1166,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "skirt",
+      "label_id": 212,
+      "clips": 19,
+      "frames": 1113,
+      "any_hand_frames": 1113,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "slow",
+      "label_id": 213,
+      "clips": 21,
+      "frames": 1290,
+      "any_hand_frames": 1290,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "soap",
+      "label_id": 214,
+      "clips": 14,
+      "frames": 851,
+      "any_hand_frames": 851,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "soft",
+      "label_id": 215,
+      "clips": 8,
+      "frames": 492,
+      "any_hand_frames": 492,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "soldier",
+      "label_id": 216,
+      "clips": 14,
+      "frames": 802,
+      "any_hand_frames": 802,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "son",
+      "label_id": 217,
+      "clips": 20,
+      "frames": 1282,
+      "any_hand_frames": 1282,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "sport",
+      "label_id": 218,
+      "clips": 14,
+      "frames": 964,
+      "any_hand_frames": 964,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "spring",
+      "label_id": 219,
+      "clips": 14,
+      "frames": 1193,
+      "any_hand_frames": 1193,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "street_or_road",
+      "label_id": 220,
+      "clips": 20,
+      "frames": 1170,
+      "any_hand_frames": 1170,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "strong",
+      "label_id": 221,
+      "clips": 8,
+      "frames": 445,
+      "any_hand_frames": 445,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "student",
+      "label_id": 222,
+      "clips": 14,
+      "frames": 976,
+      "any_hand_frames": 976,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "suit",
+      "label_id": 223,
+      "clips": 19,
+      "frames": 1354,
+      "any_hand_frames": 1354,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "sunday",
+      "label_id": 224,
+      "clips": 14,
+      "frames": 856,
+      "any_hand_frames": 856,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "table",
+      "label_id": 225,
+      "clips": 14,
+      "frames": 792,
+      "any_hand_frames": 792,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "tall",
+      "label_id": 226,
+      "clips": 21,
+      "frames": 1179,
+      "any_hand_frames": 1179,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "team",
+      "label_id": 227,
+      "clips": 14,
+      "frames": 875,
+      "any_hand_frames": 875,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "technology",
+      "label_id": 228,
+      "clips": 14,
+      "frames": 866,
+      "any_hand_frames": 866,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "telephone",
+      "label_id": 229,
+      "clips": 14,
+      "frames": 798,
+      "any_hand_frames": 798,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "television",
+      "label_id": 230,
+      "clips": 14,
+      "frames": 769,
+      "any_hand_frames": 769,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "temple",
+      "label_id": 231,
+      "clips": 20,
+      "frames": 1531,
+      "any_hand_frames": 1531,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "they",
+      "label_id": 232,
+      "clips": 21,
+      "frames": 1470,
+      "any_hand_frames": 1470,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "thick",
+      "label_id": 233,
+      "clips": 8,
+      "frames": 558,
+      "any_hand_frames": 558,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "thin",
+      "label_id": 234,
+      "clips": 4,
+      "frames": 263,
+      "any_hand_frames": 263,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "thursday",
+      "label_id": 235,
+      "clips": 14,
+      "frames": 800,
+      "any_hand_frames": 800,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "tight",
+      "label_id": 236,
+      "clips": 8,
+      "frames": 514,
+      "any_hand_frames": 514,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "today",
+      "label_id": 237,
+      "clips": 14,
+      "frames": 725,
+      "any_hand_frames": 725,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "tomorrow",
+      "label_id": 238,
+      "clips": 14,
+      "frames": 759,
+      "any_hand_frames": 759,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "tool",
+      "label_id": 239,
+      "clips": 14,
+      "frames": 1022,
+      "any_hand_frames": 1022,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "train",
+      "label_id": 240,
+      "clips": 21,
+      "frames": 1582,
+      "any_hand_frames": 1582,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "train_station",
+      "label_id": 241,
+      "clips": 20,
+      "frames": 1274,
+      "any_hand_frames": 1274,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "transportation",
+      "label_id": 242,
+      "clips": 21,
+      "frames": 1677,
+      "any_hand_frames": 1677,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "truck",
+      "label_id": 243,
+      "clips": 21,
+      "frames": 1809,
+      "any_hand_frames": 1809,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "tuesday",
+      "label_id": 244,
+      "clips": 14,
+      "frames": 799,
+      "any_hand_frames": 799,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "ugly",
+      "label_id": 245,
+      "clips": 8,
+      "frames": 488,
+      "any_hand_frames": 488,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "university",
+      "label_id": 246,
+      "clips": 20,
+      "frames": 1059,
+      "any_hand_frames": 1059,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "waiter",
+      "label_id": 247,
+      "clips": 14,
+      "frames": 1080,
+      "any_hand_frames": 1080,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "war",
+      "label_id": 248,
+      "clips": 14,
+      "frames": 862,
+      "any_hand_frames": 862,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "warm",
+      "label_id": 249,
+      "clips": 21,
+      "frames": 1296,
+      "any_hand_frames": 1296,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "we",
+      "label_id": 250,
+      "clips": 21,
+      "frames": 1403,
+      "any_hand_frames": 1403,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "weak",
+      "label_id": 251,
+      "clips": 8,
+      "frames": 480,
+      "any_hand_frames": 480,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "wednesday",
+      "label_id": 252,
+      "clips": 14,
+      "frames": 752,
+      "any_hand_frames": 752,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "week",
+      "label_id": 253,
+      "clips": 14,
+      "frames": 784,
+      "any_hand_frames": 784,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "wet",
+      "label_id": 254,
+      "clips": 21,
+      "frames": 1344,
+      "any_hand_frames": 1344,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "wide",
+      "label_id": 255,
+      "clips": 21,
+      "frames": 1202,
+      "any_hand_frames": 1202,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "wife",
+      "label_id": 256,
+      "clips": 20,
+      "frames": 1189,
+      "any_hand_frames": 1189,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "winter",
+      "label_id": 257,
+      "clips": 14,
+      "frames": 825,
+      "any_hand_frames": 825,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "woman",
+      "label_id": 258,
+      "clips": 20,
+      "frames": 1110,
+      "any_hand_frames": 1110,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "yellow",
+      "label_id": 259,
+      "clips": 20,
+      "frames": 1176,
+      "any_hand_frames": 1176,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "yesterday",
+      "label_id": 260,
+      "clips": 14,
+      "frames": 708,
+      "any_hand_frames": 708,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "you",
+      "label_id": 261,
+      "clips": 21,
+      "frames": 1254,
+      "any_hand_frames": 1254,
+      "any_hand_rate": 1.0
+    },
+    {
+      "word": "young",
+      "label_id": 262,
+      "clips": 21,
+      "frames": 1130,
+      "any_hand_frames": 1130,
+      "any_hand_rate": 1.0
+    }
+  ],
+  "failed_this_run": []
+}

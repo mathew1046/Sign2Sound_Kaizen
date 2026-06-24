@@ -1,0 +1,13 @@
+{
+  "word": "dog",
+  "stem": "MVI_4148",
+  "video": "/vol/input/Animals/1. Dog/MVI_4148.MOV",
+  "frames": 71,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

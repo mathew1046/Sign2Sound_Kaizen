@@ -1,0 +1,17 @@
+{
+  "word": "boat",
+  "stem": "MVI_3222",
+  "video": "/vol/input/Means_of_Transportation/15. Boat/MVI_3222.MOV",
+  "frames": 118,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 14.886,
+  "fps_processed": 7.93
+}

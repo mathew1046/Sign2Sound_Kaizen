@@ -1,0 +1,13 @@
+{
+  "word": "bank",
+  "stem": "MVI_3500",
+  "video": "/vol/input/Places/35. Bank/MVI_3500.MOV",
+  "frames": 44,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

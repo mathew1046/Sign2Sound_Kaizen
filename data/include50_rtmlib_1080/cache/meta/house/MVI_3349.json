@@ -1,0 +1,13 @@
+{
+  "word": "house",
+  "stem": "MVI_3349",
+  "video": "/vol/input/Places/19. House/MVI_3349.MOV",
+  "frames": 66,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

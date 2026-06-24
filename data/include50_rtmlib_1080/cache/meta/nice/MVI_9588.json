@@ -1,0 +1,17 @@
+{
+  "word": "nice",
+  "stem": "MVI_9588",
+  "video": "/vol/input/Adjectives/9. Nice/MVI_9588.MOV",
+  "frames": 58,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 7.546,
+  "fps_processed": 7.69
+}
