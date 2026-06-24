@@ -1,0 +1,513 @@
+{
+  "checkpoint": "/home/mathew/signbert_unofficial/notebooks/checkpoints/mspt_best.pt",
+  "splits": {
+    "train": {
+      "accuracy": 0.9560067681895094,
+      "n": 591
+    },
+    "val": {
+      "accuracy": 0.7829457364341085,
+      "n": 129
+    },
+    "test": {
+      "accuracy": 0.7692307692307693,
+      "n": 130
+    }
+  },
+  "per_class_test": [
+    {
+      "label_id": 14,
+      "gloss": "fall",
+      "n": 0,
+      "acc": null,
+      "correct": 0
+    },
+    {
+      "label_id": 16,
+      "gloss": "father",
+      "n": 0,
+      "acc": null,
+      "correct": 0
+    },
+    {
+      "label_id": 32,
+      "gloss": "pen",
+      "n": 0,
+      "acc": null,
+      "correct": 0
+    },
+    {
+      "label_id": 39,
+      "gloss": "store_shop",
+      "n": 0,
+      "acc": null,
+      "correct": 0
+    },
+    {
+      "label_id": 7,
+      "gloss": "cell_phone",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    },
+    {
+      "label_id": 31,
+      "gloss": "paint",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    },
+    {
+      "label_id": 41,
+      "gloss": "teacher",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    },
+    {
+      "label_id": 46,
+      "gloss": "white",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    },
+    {
+      "label_id": 23,
+      "gloss": "hot",
+      "n": 4,
+      "correct": 1,
+      "acc": 0.25
+    },
+    {
+      "label_id": 15,
+      "gloss": "fan",
+      "n": 3,
+      "correct": 1,
+      "acc": 0.3333333333333333
+    },
+    {
+      "label_id": 25,
+      "gloss": "i",
+      "n": 6,
+      "correct": 2,
+      "acc": 0.3333333333333333
+    },
+    {
+      "label_id": 42,
+      "gloss": "thank_you",
+      "n": 3,
+      "correct": 1,
+      "acc": 0.3333333333333333
+    },
+    {
+      "label_id": 19,
+      "gloss": "good_morning",
+      "n": 2,
+      "correct": 1,
+      "acc": 0.5
+    },
+    {
+      "label_id": 30,
+      "gloss": "new",
+      "n": 6,
+      "correct": 3,
+      "acc": 0.5
+    },
+    {
+      "label_id": 34,
+      "gloss": "quiet",
+      "n": 2,
+      "correct": 1,
+      "acc": 0.5
+    },
+    {
+      "label_id": 35,
+      "gloss": "red",
+      "n": 4,
+      "correct": 2,
+      "acc": 0.5
+    },
+    {
+      "label_id": 48,
+      "gloss": "year",
+      "n": 2,
+      "correct": 1,
+      "acc": 0.5
+    },
+    {
+      "label_id": 0,
+      "gloss": "bank",
+      "n": 3,
+      "correct": 2,
+      "acc": 0.6666666666666666
+    },
+    {
+      "label_id": 10,
+      "gloss": "death",
+      "n": 3,
+      "correct": 2,
+      "acc": 0.6666666666666666
+    },
+    {
+      "label_id": 17,
+      "gloss": "girl",
+      "n": 3,
+      "correct": 2,
+      "acc": 0.6666666666666666
+    },
+    {
+      "label_id": 22,
+      "gloss": "hello",
+      "n": 3,
+      "correct": 2,
+      "acc": 0.6666666666666666
+    },
+    {
+      "label_id": 49,
+      "gloss": "you_plural",
+      "n": 7,
+      "correct": 5,
+      "acc": 0.7142857142857143
+    },
+    {
+      "label_id": 20,
+      "gloss": "happy",
+      "n": 4,
+      "correct": 3,
+      "acc": 0.75
+    },
+    {
+      "label_id": 1,
+      "gloss": "big_large",
+      "n": 5,
+      "correct": 5,
+      "acc": 1.0
+    },
+    {
+      "label_id": 2,
+      "gloss": "bird",
+      "n": 5,
+      "correct": 5,
+      "acc": 1.0
+    },
+    {
+      "label_id": 3,
+      "gloss": "black",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 4,
+      "gloss": "boy",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 5,
+      "gloss": "brother",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 6,
+      "gloss": "car",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 8,
+      "gloss": "court",
+      "n": 3,
+      "correct": 3,
+      "acc": 1.0
+    },
+    {
+      "label_id": 9,
+      "gloss": "cow",
+      "n": 4,
+      "correct": 4,
+      "acc": 1.0
+    },
+    {
+      "label_id": 11,
+      "gloss": "dog",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 12,
+      "gloss": "dry",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 13,
+      "gloss": "election",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 18,
+      "gloss": "good",
+      "n": 3,
+      "correct": 3,
+      "acc": 1.0
+    },
+    {
+      "label_id": 21,
+      "gloss": "hat",
+      "n": 4,
+      "correct": 4,
+      "acc": 1.0
+    },
+    {
+      "label_id": 24,
+      "gloss": "house",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 26,
+      "gloss": "it",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 27,
+      "gloss": "long",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 28,
+      "gloss": "loud",
+      "n": 4,
+      "correct": 4,
+      "acc": 1.0
+    },
+    {
+      "label_id": 29,
+      "gloss": "monday",
+      "n": 3,
+      "correct": 3,
+      "acc": 1.0
+    },
+    {
+      "label_id": 33,
+      "gloss": "priest",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 36,
+      "gloss": "shoes",
+      "n": 6,
+      "correct": 6,
+      "acc": 1.0
+    },
+    {
+      "label_id": 37,
+      "gloss": "short",
+      "n": 4,
+      "correct": 4,
+      "acc": 1.0
+    },
+    {
+      "label_id": 38,
+      "gloss": "small_little",
+      "n": 5,
+      "correct": 5,
+      "acc": 1.0
+    },
+    {
+      "label_id": 40,
+      "gloss": "summer",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 43,
+      "gloss": "time",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 44,
+      "gloss": "train_ticket",
+      "n": 3,
+      "correct": 3,
+      "acc": 1.0
+    },
+    {
+      "label_id": 45,
+      "gloss": "tshirt",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 47,
+      "gloss": "window",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    }
+  ],
+  "top10_test": [
+    {
+      "label_id": 1,
+      "gloss": "big_large",
+      "n": 5,
+      "correct": 5,
+      "acc": 1.0
+    },
+    {
+      "label_id": 2,
+      "gloss": "bird",
+      "n": 5,
+      "correct": 5,
+      "acc": 1.0
+    },
+    {
+      "label_id": 3,
+      "gloss": "black",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 4,
+      "gloss": "boy",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 5,
+      "gloss": "brother",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 6,
+      "gloss": "car",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    },
+    {
+      "label_id": 8,
+      "gloss": "court",
+      "n": 3,
+      "correct": 3,
+      "acc": 1.0
+    },
+    {
+      "label_id": 9,
+      "gloss": "cow",
+      "n": 4,
+      "correct": 4,
+      "acc": 1.0
+    },
+    {
+      "label_id": 11,
+      "gloss": "dog",
+      "n": 2,
+      "correct": 2,
+      "acc": 1.0
+    },
+    {
+      "label_id": 12,
+      "gloss": "dry",
+      "n": 1,
+      "correct": 1,
+      "acc": 1.0
+    }
+  ],
+  "bottom10_test": [
+    {
+      "label_id": 35,
+      "gloss": "red",
+      "n": 4,
+      "correct": 2,
+      "acc": 0.5
+    },
+    {
+      "label_id": 48,
+      "gloss": "year",
+      "n": 2,
+      "correct": 1,
+      "acc": 0.5
+    },
+    {
+      "label_id": 15,
+      "gloss": "fan",
+      "n": 3,
+      "correct": 1,
+      "acc": 0.3333333333333333
+    },
+    {
+      "label_id": 25,
+      "gloss": "i",
+      "n": 6,
+      "correct": 2,
+      "acc": 0.3333333333333333
+    },
+    {
+      "label_id": 42,
+      "gloss": "thank_you",
+      "n": 3,
+      "correct": 1,
+      "acc": 0.3333333333333333
+    },
+    {
+      "label_id": 23,
+      "gloss": "hot",
+      "n": 4,
+      "correct": 1,
+      "acc": 0.25
+    },
+    {
+      "label_id": 7,
+      "gloss": "cell_phone",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    },
+    {
+      "label_id": 31,
+      "gloss": "paint",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    },
+    {
+      "label_id": 41,
+      "gloss": "teacher",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    },
+    {
+      "label_id": 46,
+      "gloss": "white",
+      "n": 1,
+      "correct": 0,
+      "acc": 0.0
+    }
+  ]
+}

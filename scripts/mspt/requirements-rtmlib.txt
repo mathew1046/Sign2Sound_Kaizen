@@ -1,0 +1,9 @@
+rtmlib>=0.0.13
+opencv-python>=4.8.0
+numpy>=1.26.0
+onnx>=1.16.0
+nvidia-cudnn-cu12>=9.0.0
+# Install GPU build ONLY (do not pip install plain onnxruntime — it conflicts).
+# Python 3.13 / conda base: verified with 1.20.2. GPU pose needs cuDNN 9; else CPU fallback.
+onnxruntime-gpu==1.20.2; platform_system != "Darwin"
+onnxruntime>=1.20.2; platform_system == "Darwin"
