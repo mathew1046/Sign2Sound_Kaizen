@@ -35,10 +35,13 @@ data/processed/features/*
 data/processed_normalized/features/*
 !data/processed/.gitkeep
 datasets/
+include50_word_samples.zip
 
 # Model Checkpoints
 checkpoints/*.pth
 checkpoints/*.pt
+!checkpoints/mspt/*.pt
+!weights/yolo26/*.pt
 !checkpoints/README.md
 *.pth
 *.pt
