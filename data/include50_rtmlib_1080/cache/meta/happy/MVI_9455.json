@@ -1,0 +1,13 @@
+{
+  "word": "happy",
+  "stem": "MVI_9455",
+  "video": "/vol/input/Adjectives/3. happy/MVI_9455.MOV",
+  "frames": 51,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

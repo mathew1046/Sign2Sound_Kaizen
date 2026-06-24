@@ -1,0 +1,13 @@
+{
+  "word": "big_large",
+  "stem": "MVI_5203",
+  "video": "/vol/input/Adjectives/83. big large/MVI_5203.MOV",
+  "frames": 65,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

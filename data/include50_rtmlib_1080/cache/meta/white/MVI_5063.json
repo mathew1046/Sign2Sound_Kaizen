@@ -1,0 +1,13 @@
+{
+  "word": "white",
+  "stem": "MVI_5063",
+  "video": "/vol/input/Colours/55. White/MVI_5063.MOV",
+  "frames": 51,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

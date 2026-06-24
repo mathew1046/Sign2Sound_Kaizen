@@ -1,0 +1,13 @@
+{
+  "word": "new",
+  "stem": "MVI_5231",
+  "video": "/vol/input/Adjectives/91. new/MVI_5231.MOV",
+  "frames": 62,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

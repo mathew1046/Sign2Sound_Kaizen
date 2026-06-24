@@ -1,0 +1,13 @@
+{
+  "word": "time",
+  "stem": "MVI_4669",
+  "video": "/vol/input/Days_and_Time/86. Time/MVI_4669.MOV",
+  "frames": 73,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

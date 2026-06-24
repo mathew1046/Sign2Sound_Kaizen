@@ -1,0 +1,11 @@
+{
+  "total_clips": 4258,
+  "splits": {
+    "train": 3498,
+    "val": 386,
+    "test": 374
+  },
+  "num_classes": 263,
+  "unmatched_split": 3421,
+  "missing_label_id": 0
+}

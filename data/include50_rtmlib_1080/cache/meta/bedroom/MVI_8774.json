@@ -1,0 +1,17 @@
+{
+  "word": "bedroom",
+  "stem": "MVI_8774",
+  "video": "/vol/input/Home/30. Bedroom/MVI_8774.MP4",
+  "frames": 102,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 12.903,
+  "fps_processed": 7.9
+}

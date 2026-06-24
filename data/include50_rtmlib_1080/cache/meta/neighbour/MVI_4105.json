@@ -1,0 +1,17 @@
+{
+  "word": "neighbour",
+  "stem": "MVI_4105",
+  "video": "/vol/input/People/76. Neighbour/MVI_4105.MOV",
+  "frames": 68,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 8.618,
+  "fps_processed": 7.89
+}

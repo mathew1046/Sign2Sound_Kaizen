@@ -1,0 +1,17 @@
+{
+  "word": "narrow",
+  "stem": "MVI_9391",
+  "video": "/vol/input/Adjectives/82. narrow/MVI_9391.MOV",
+  "frames": 48,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 6.267,
+  "fps_processed": 7.66
+}

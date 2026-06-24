@@ -1,0 +1,13 @@
+{
+  "word": "teacher",
+  "stem": "MVI_5310",
+  "video": "/vol/input/Jobs/84. Teacher/MVI_5310.MOV",
+  "frames": 61,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

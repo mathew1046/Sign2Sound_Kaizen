@@ -1,0 +1,17 @@
+{
+  "word": "card",
+  "stem": "MVI_9082",
+  "video": "/vol/input/Home/48. Card/MVI_9082.MP4",
+  "frames": 73,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 11.161,
+  "fps_processed": 6.54
+}

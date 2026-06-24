@@ -1,0 +1,13 @@
+{
+  "word": "cell_phone",
+  "stem": "MVI_4968",
+  "video": "/vol/input/Electronics/54. Cell phone/MVI_4968.MOV",
+  "frames": 59,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

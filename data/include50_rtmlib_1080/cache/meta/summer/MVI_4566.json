@@ -1,0 +1,13 @@
+{
+  "word": "summer",
+  "stem": "MVI_4566",
+  "video": "/vol/input/Seasons/61. Summer/MVI_4566.MOV",
+  "frames": 75,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

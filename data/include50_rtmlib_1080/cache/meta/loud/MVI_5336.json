@@ -1,0 +1,13 @@
+{
+  "word": "loud",
+  "stem": "MVI_5336",
+  "video": "/vol/input/Adjectives/1. loud/MVI_5336.MOV",
+  "frames": 42,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

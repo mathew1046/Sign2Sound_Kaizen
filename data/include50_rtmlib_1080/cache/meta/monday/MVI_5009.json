@@ -1,0 +1,13 @@
+{
+  "word": "monday",
+  "stem": "MVI_5009",
+  "video": "/vol/input/Days_and_Time/67. Monday/MVI_5009.MOV",
+  "frames": 47,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

@@ -1,0 +1,17 @@
+{
+  "word": "plane",
+  "stem": "MVI_4174",
+  "video": "/vol/input/Means_of_Transportation/10. Plane/MVI_4174.MOV",
+  "frames": 62,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "device": "cuda",
+  "onnxruntime_gpu": "1.20.2",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true,
+  "process_sec": 8.084,
+  "fps_processed": 7.67
+}

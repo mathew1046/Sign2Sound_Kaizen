@@ -1,0 +1,13 @@
+{
+  "word": "court",
+  "stem": "MVI_3286",
+  "video": "/vol/input/Places/23. Court/MVI_3286.MOV",
+  "frames": 68,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

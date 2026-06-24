@@ -1,0 +1,13 @@
+{
+  "word": "it",
+  "stem": "MVI_9936",
+  "video": "/vol/input/Pronouns/44. it/MVI_9936.MOV",
+  "frames": 74,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}

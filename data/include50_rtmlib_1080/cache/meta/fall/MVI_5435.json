@@ -1,0 +1,13 @@
+{
+  "word": "fall",
+  "stem": "MVI_5435",
+  "video": "/vol/input/Seasons/64. Fall/MVI_5435.MOV",
+  "frames": 59,
+  "width": 1920,
+  "height": 1080,
+  "fps": 25.0,
+  "model": "yolox-x + rtmw-x_384x288",
+  "backend": "rtmlib",
+  "keypoint_format": "coco_wholebody_133",
+  "all_frames_processed": true
+}
