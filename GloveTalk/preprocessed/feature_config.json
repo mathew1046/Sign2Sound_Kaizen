@@ -1,0 +1,9 @@
+{
+  "num_raw_features": 18,
+  "num_relative_features": 4,
+  "num_derivative_features": 18,
+  "num_features": 40,
+  "window_size": 30,
+  "dt": 0.02,
+  "feature_layout": "raw_18 + relative_quat_4 + derivatives_18"
+}

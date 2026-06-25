@@ -1,0 +1,40 @@
+window_size: 30
+window_stride: 5
+sampling_rate_hz: 50
+dt: 0.02
+
+num_raw_features: 18
+num_relative_features: 4
+num_derivative_features: 18
+num_features: 40
+
+words:
+  target_frames: 50
+  augment_multiplier: 4
+  batch_size: 32
+  epochs: 100
+  early_stopping_patience: 12
+  reduce_lr_patience: 5
+
+alphabet:
+  pseudo_sequence_length: 30
+  variants_per_sample: 30
+  augment_multiplier: 4
+  batch_size: 32
+  epochs: 100
+  early_stopping_patience: 12
+  reduce_lr_patience: 5
+
+optimizer:
+  name: adam
+  learning_rate: 0.001
+
+model:
+  bilstm_units_1: 128
+  bilstm_units_2: 64
+  dense_units: 64
+  spatial_dropout: 0.3
+  dropout: 0.4
+
+train_val_split: 0.2
+random_state: 42
