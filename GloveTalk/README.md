@@ -45,6 +45,14 @@ firmware/          ESP32 glove sketches
 config/            training.yaml hyperparameters
 ```
 
+## Words model (22 signs only)
+
+The words Bi-LSTM recognizes exactly **22 signs**, defined in [`config/words_vocabulary.yaml`](config/words_vocabulary.yaml):
+
+black, boy, cell phone, fan, good, hello, house, i, it, large, long, loud, monday, my namer is shaheem, new, pen, priest, shop, teacher, thank you, time, white
+
+The alphabet model is separate (19 letters) and must not be mixed into the words vocabulary.
+
 ## Model input
 
 - **Shape:** `(30, 40)` — 30 frames × 40 features

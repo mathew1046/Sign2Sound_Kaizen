@@ -34,6 +34,8 @@ BAUD_RATE = 115200
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from scripts.vocabulary import load_words_vocabulary
+
 CSV_FILENAME = str(ROOT / "data" / "raw" / "sign_language_dataset.csv")
 CALIBRATION_FILE = str(ROOT / "sensor_calibration.json")
 TARGET_FRAMES = 50
@@ -163,13 +165,20 @@ listener_thread = threading.Thread(target=record_serial_background, daemon=True)
 listener_thread.start()
 
 # --- MAIN RECORDING LOOP ---
+WORD_VOCABULARY = load_words_vocabulary()
 print("\n--- DYNAMIC SIGN DATA COLLECTOR ---")
+print(f"Allowed vocabulary: {len(WORD_VOCABULARY)} words")
+for i, word in enumerate(WORD_VOCABULARY, 1):
+    print(f"  {i:2}. {word}")
 
 while True:
-    label = input("\nEnter sign label (e.g. 'hello') or 'quit': ").strip().lower()
+    label = input("\nEnter sign label (must be one of the 22 words) or 'quit': ").strip().lower()
     if label == 'quit':
         break
     if not label:
+        continue
+    if label not in WORD_VOCABULARY:
+        print(f"Invalid label. Choose one of the {len(WORD_VOCABULARY)} words listed above.")
         continue
 
     take_num = 1

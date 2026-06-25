@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from paths import ALPHABET_CLEAN_CSV, ALPHABET_RAW_CSV, PREPROCESSED, WORDS_CLEAN_CSV, WORDS_RAW_CSV
+from scripts.vocabulary import load_words_vocabulary
 
 RAW_COLUMNS = [
     "L_qw", "L_qx", "L_qy", "L_qz",
@@ -64,6 +65,7 @@ def clean_alphabet() -> pd.DataFrame:
 
 def clean_words() -> pd.DataFrame:
     print(f"Cleaning words data from {WORDS_RAW_CSV}...")
+    vocabulary = set(load_words_vocabulary())
     expected_cols = len(WORDS_COLUMNS)
     valid_rows = []
     fixed = 0
@@ -91,6 +93,19 @@ def clean_words() -> pd.DataFrame:
     for col in RAW_COLUMNS:
         df[col] = df[col].astype(float)
     df["timestamp"] = df["timestamp"].astype(float)
+    df["label"] = df["label"].str.strip().str.lower()
+
+    unknown = sorted(set(df["label"].unique()) - vocabulary)
+    if unknown:
+        dropped = len(df[df["label"].isin(unknown)])
+        df = df[df["label"].isin(vocabulary)]
+        print(f"  Dropped {dropped} frames with labels outside the 22-word vocabulary: {unknown}")
+
+    if len(set(df["label"].unique())) != 22:
+        present = sorted(df["label"].unique())
+        raise ValueError(
+            f"Words dataset must contain exactly 22 labels; found {len(present)}: {present}"
+        )
 
     PREPROCESSED.mkdir(parents=True, exist_ok=True)
     df.to_csv(WORDS_CLEAN_CSV, index=False)

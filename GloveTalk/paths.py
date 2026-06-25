@@ -31,3 +31,4 @@ WORDS_CLASSES = WEIGHTS / "words_classes.npy"
 WORDS_CLASSES_PREPROCESSED = PREPROCESSED / "words_classes.npy"
 
 TRAINING_CONFIG = CONFIG / "training.yaml"
+WORDS_VOCABULARY = CONFIG / "words_vocabulary.yaml"

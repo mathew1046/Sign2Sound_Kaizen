@@ -26,6 +26,7 @@ from paths import (  # noqa: E402
     WORDS_TRAIN_NPZ,
     WORDS_VAL_NPZ,
 )
+from scripts.vocabulary import load_words_vocabulary
 from scripts.preprocess.feature_engineering import (  # noqa: E402
     NUM_FEATURES,
     preprocess_raw_frame,
@@ -194,10 +195,10 @@ def prepare_words_dataset(cfg: dict) -> None:
         X_train_list, y_train_list, augment_mult, apply_time_ops=True
     )
 
-    encoder = LabelEncoder()
-    encoder.fit(y_train_list + y_val_list)
-    y_train = encoder.transform(y_train_list)
-    y_val = encoder.transform(y_val_list)
+    vocabulary = load_words_vocabulary()
+    label_to_idx = {word: idx for idx, word in enumerate(vocabulary)}
+    y_train = np.array([label_to_idx[y] for y in y_train_list], dtype=np.int64)
+    y_val = np.array([label_to_idx[y] for y in y_val_list], dtype=np.int64)
     X_train = np.stack(X_train_list).astype(np.float32)
     X_val = np.stack(X_val_list).astype(np.float32)
 
@@ -209,9 +210,9 @@ def prepare_words_dataset(cfg: dict) -> None:
     np.savez(WORDS_TRAIN_NPZ, X=X_train, y=y_train)
     np.savez(WORDS_VAL_NPZ, X=X_val, y=y_val)
     joblib.dump(scaler, WORDS_SCALER)
-    np.save(PREPROCESSED / "words_classes.npy", encoder.classes_)
+    np.save(PREPROCESSED / "words_classes.npy", np.array(vocabulary))
     save_feature_config(FEATURE_CONFIG, window_size, dt)
-    print(f"  Words train: {X_train.shape}, val: {X_val.shape}, classes: {len(encoder.classes_)}")
+    print(f"  Words train: {X_train.shape}, val: {X_val.shape}, classes: {len(vocabulary)} (fixed 22-word vocabulary)")
 
 
 def prepare_alphabet_dataset(cfg: dict) -> None:

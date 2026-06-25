@@ -1,0 +1,25 @@
+# Canonical GloveTalk word vocabulary (22 signs only)
+num_classes: 22
+words:
+  - black
+  - boy
+  - cell phone
+  - fan
+  - good
+  - hello
+  - house
+  - i
+  - it
+  - large
+  - long
+  - loud
+  - monday
+  - my namer is shaheem
+  - new
+  - pen
+  - priest
+  - shop
+  - teacher
+  - thank you
+  - time
+  - white
