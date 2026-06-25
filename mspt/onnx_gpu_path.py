@@ -65,3 +65,54 @@ def configure_onnx_gpu_libs() -> list[str]:
 
     _CONFIGURED = True
     return added
+
+
+def ort_session_providers(device: str) -> list:
+    """ONNX Runtime providers with CUDA tuning when available."""
+    import onnxruntime as ort
+
+    if device == "cpu" or "CUDAExecutionProvider" not in ort.get_available_providers():
+        return ["CPUExecutionProvider"]
+    return [
+        (
+            "CUDAExecutionProvider",
+            {
+                "device_id": 0,
+                "arena_extend_strategy": "kNextPowerOfTwo",
+                "cudnn_conv_algo_search": "HEURISTIC",
+                "do_copy_in_default_stream": True,
+            },
+        ),
+        "CPUExecutionProvider",
+    ]
+
+
+def recreate_ort_session(onnx_path: str, device: str):
+    """Recreate an ONNX session with graph optimizations enabled."""
+    import onnxruntime as ort
+
+    opts = ort.SessionOptions()
+    opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    opts.enable_mem_pattern = True
+    opts.enable_cpu_mem_arena = True
+    opts.intra_op_num_threads = 1
+    return ort.InferenceSession(
+        onnx_path,
+        sess_options=opts,
+        providers=ort_session_providers(device),
+    )
+
+
+def tune_rtmlib_onnx_sessions(model, device: str) -> None:
+    """Replace rtmlib YOLOX/RTMPose sessions with optimized ORT sessions."""
+    for attr in ("det_model", "pose_model"):
+        tool = getattr(model, attr, None)
+        if tool is None or getattr(tool, "backend", None) != "onnxruntime":
+            continue
+        onnx_path = getattr(tool, "onnx_model", None)
+        if not onnx_path:
+            continue
+        try:
+            tool.session = recreate_ort_session(onnx_path, device)
+        except Exception:
+            pass

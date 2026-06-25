@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from mspt.rtmlib_preprocess import RtmlibWholebodyExtractor  # noqa: E402
 
 MAX_VIDEO_SEC = 10.0
-MAX_POSE_WIDTH = 960
+MAX_POSE_WIDTH = 720
 ALLOWED_SUFFIXES = {".mp4", ".webm", ".mov", ".avi", ".mkv"}
 
 
@@ -38,7 +38,7 @@ class VideoOrientationExtractor:
 
     def _get_extractor(self) -> RtmlibWholebodyExtractor:
         if self._extractor is None:
-            self._extractor = RtmlibWholebodyExtractor()
+            self._extractor = RtmlibWholebodyExtractor(det_interval=5)
         return self._extractor
 
     def extract_from_path(self, video_path: Path) -> tuple[np.ndarray, float]:

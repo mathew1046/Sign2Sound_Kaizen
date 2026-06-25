@@ -43,16 +43,30 @@ def _check_onnxruntime() -> tuple[list[str], list[str]]:
     except ImportError as exc:
         return [f"onnxruntime import failed: {exc}"], info
 
+    from mspt.rtmlib_preprocess import (
+        _cudnn_available,
+        _gpu_fallback_reason,
+        _installed_onnx_packages,
+        _probe_cuda_provider,
+    )
+
     providers = ort.get_available_providers()
+    pkgs = _installed_onnx_packages()
     info.append(f"onnxruntime {ort.__version__} providers={providers}")
-    from mspt.rtmlib_preprocess import _cudnn_available, _probe_cuda_provider
+    if pkgs:
+        info.append(f"onnx pip packages: {', '.join(pkgs)}")
+    if any(p.startswith("onnxruntime==") for p in pkgs):
+        errors.append(
+            "plain onnxruntime (CPU) is installed — it shadows onnxruntime-gpu. "
+            "Fix: pip uninstall onnxruntime && pip install onnxruntime-gpu==1.20.2 nvidia-cudnn-cu12"
+        )
 
     if _probe_cuda_provider():
         info.append("onnxruntime CUDA: usable")
     elif "CUDAExecutionProvider" in providers:
-        info.append("WARN: CUDAExecutionProvider listed but not usable (install cuDNN 9 for GPU pose)")
+        errors.append(f"CUDAExecutionProvider listed but not usable ({_gpu_fallback_reason()})")
     else:
-        info.append("onnxruntime CUDA: not available — rtmlib will use CPU")
+        errors.append(_gpu_fallback_reason())
     return errors, info
 
 
@@ -84,7 +98,7 @@ def _smoke_test() -> tuple[list[str], list[str]]:
     import numpy as np
     from mspt.rtmlib_preprocess import RtmlibWholebodyExtractor
 
-    ext = RtmlibWholebodyExtractor()
+    ext = RtmlibWholebodyExtractor(det_interval=1)
     info.append(f"rtmlib device: {ext.device}")
     frame = np.zeros((240, 320, 3), dtype=np.uint8)
     wb = ext.process_frame(frame)
@@ -145,7 +159,7 @@ def main() -> int:
 
     if all_errors:
         print(f"\nFAILED ({len(all_errors)} issues)")
-        print("Fix: pip install -r notebooks/requirements-rtmlib.txt")
+        print("Fix: pip uninstall onnxruntime; pip install -r scripts/mspt/requirements-rtmlib.txt")
         return 1
 
     print("\nAll checks passed.")

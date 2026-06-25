@@ -3,20 +3,21 @@
 
 Smooth preview (async frame grab + pose worker), large prediction overlay,
 rtmlib COCO-WholeBody skeleton panel bottom-left. Clip-based inference like
-``run_mspt_webcam_finetuned.py``.
+``run_mspt_webcam_finetuned.py``. Speaks the top prediction via pyttsx3 (``--no-tts`` to disable).
 
 Usage:
-  conda activate base
-  cd notebooks
-  python rtmlib_live_mspt.py \\
+  cd ~/Arrakis/Sign2Sound_Kaizen
+  export PYTHONPATH=$PWD:$PWD/scripts/mspt
+  python scripts/mspt/rtmlib_live_mspt.py \\
     --video-url http://localhost:8080/video \\
-    --checkpoint checkpoints/mspt_rtmlib_263_best.pt \\
+    --checkpoint checkpoints/mspt/mspt_rtmlib_263_best.pt \\
     --lab-root data/include50_rtmlib_1080
 """
 
 from __future__ import annotations
 
 import argparse
+import queue
 import re
 import sys
 import threading
@@ -58,7 +59,7 @@ DEFAULT_GAP_SEC = 1.0
 DEFAULT_FPS = 10
 DEFAULT_DISPLAY_FPS = 0
 DEFAULT_SKELETON_PANEL = 420
-DEFAULT_POSE_MAX_WIDTH = 960
+DEFAULT_POSE_MAX_WIDTH = 720
 DEFAULT_MIN_CONFIDENCE = 0.12
 DEFAULT_HOLD_PRED_SEC = 2.0
 DEFAULT_MOTION_THRESHOLD = 0.008
@@ -66,6 +67,57 @@ DEFAULT_MOTION_THRESHOLD = 0.008
 
 def _display_gloss(label: str) -> str:
     return label.replace("_", " ").title()
+
+
+def _gloss_to_speech(label: str) -> str:
+    return label if " " in label else _display_gloss(label)
+
+
+class TtsSpeaker:
+    """Background pyttsx3 worker so speech does not block the preview loop."""
+
+    def __init__(self, rate: int = 150, volume: float = 1.0) -> None:
+        self._rate = rate
+        self._volume = volume
+        self._queue: queue.Queue[str | None] = queue.Queue()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="mspt-tts")
+        self._available = True
+        self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            import pyttsx3
+
+            engine = pyttsx3.init()
+            engine.setProperty("rate", self._rate)
+            engine.setProperty("volume", max(0.0, min(1.0, self._volume)))
+            while True:
+                text = self._queue.get()
+                if text is None:
+                    break
+                engine.say(text)
+                engine.runAndWait()
+        except Exception as exc:
+            self._available = False
+            print(f"[tts] disabled ({exc})")
+
+    def speak_gloss(self, gloss: str) -> None:
+        if not self._available or not gloss or gloss == "uncertain":
+            return
+        text = _gloss_to_speech(gloss)
+        print(f"[tts] {text}")
+        self._queue.put(text)
+
+    def close(self) -> None:
+        self._queue.put(None)
+        self._thread.join(timeout=5.0)
+
+
+def _speak_prediction(tts: TtsSpeaker | None, preds: list[tuple[str, float]]) -> None:
+    if tts is None or not preds:
+        return
+    label, _conf = preds[0]
+    tts.speak_gloss(label)
 
 
 def resize_for_pose(frame: np.ndarray, max_width: int) -> np.ndarray:
@@ -165,7 +217,13 @@ class FrameGrabber:
 class PoseWorker:
     """Background rtmlib pose — display never blocks on inference."""
 
-    def __init__(self, extractor: RtmlibWholebodyExtractor, pose_max_width: int, unmirror_pose: bool):
+    def __init__(
+        self,
+        extractor: RtmlibWholebodyExtractor,
+        pose_max_width: int,
+        unmirror_pose: bool,
+    ):
+        self._extractor = extractor
         self._extractor = extractor
         self._pose_max_width = pose_max_width
         self._unmirror_pose = unmirror_pose
@@ -193,6 +251,7 @@ class PoseWorker:
         """Drop queued frames so the next clip starts clean."""
         with self._lock:
             self._pending = None
+        self._extractor.reset_tracking()
 
     def _loop(self) -> None:
         while not self._stop.is_set():
@@ -443,8 +502,14 @@ def run_live(args: argparse.Namespace) -> None:
         f"[live] clip={args.clip_sec}s gap={args.gap_sec}s hold={args.hold_pred_sec}s "
         f"fps={args.fps} motion>={args.motion_threshold}"
     )
+    tts: TtsSpeaker | None = None
+    if not args.no_tts:
+        tts = TtsSpeaker(rate=args.tts_rate, volume=args.tts_volume)
+        print(f"[live] TTS enabled (rate={args.tts_rate})")
+    else:
+        print("[live] TTS disabled")
 
-    extractor = RtmlibWholebodyExtractor(device=args.rtmlib_device)
+    extractor = RtmlibWholebodyExtractor(device=args.rtmlib_device, det_interval=args.det_interval)
     worker = PoseWorker(extractor, args.pose_max_width, unmirror_pose=args.unmirror_pose)
     print(f"[live] rtmlib device: {extractor.device} | model: yolox-x + rtmw-x")
 
@@ -534,6 +599,7 @@ def run_live(args: argparse.Namespace) -> None:
                                 model, wb_buf, args.max_seq_len, device, idx_to_label, args.top_k,
                                 min_confidence=args.min_confidence,
                             )
+                            _speak_prediction(tts, last_preds)
                             hold_start = now
                             phase = "hold"
                         else:
@@ -552,6 +618,7 @@ def run_live(args: argparse.Namespace) -> None:
                             model, wb_buf, args.max_seq_len, device, idx_to_label, args.top_k,
                             min_confidence=args.min_confidence,
                         )
+                        _speak_prediction(tts, last_preds)
                         hold_start = now
                         phase = "hold"
                     else:
@@ -611,6 +678,8 @@ def run_live(args: argparse.Namespace) -> None:
         print(f"[live] cannot open stream: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
     finally:
+        if tts is not None:
+            tts.close()
         grabber.stop()
         worker.close()
         extractor.close()
@@ -626,7 +695,10 @@ def main() -> int:
     ap.add_argument("--lab-root", type=Path, default=DEFAULT_LAB, help="rtmlib lab (manifest.csv for 263-class names)")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     ap.add_argument("--rtmlib-device", default=None, help="onnxruntime device for rtmlib (cuda/cpu)")
-    ap.add_argument("--pose-max-width", type=int, default=DEFAULT_POSE_MAX_WIDTH)
+    ap.add_argument("--pose-max-width", type=int, default=DEFAULT_POSE_MAX_WIDTH,
+                    help="Resize frame width before pose (lower = faster)")
+    ap.add_argument("--det-interval", type=int, default=5,
+                    help="Run YOLOX every N frames; pose runs every frame (default 5)")
     ap.add_argument("--clip-sec", type=float, default=DEFAULT_CLIP_SEC,
                     help="Wall-clock window per sign (buffer cleared after this)")
     ap.add_argument("--gap-sec", type=float, default=DEFAULT_GAP_SEC,
@@ -653,6 +725,9 @@ def main() -> int:
     )
     ap.add_argument("--skeleton-panel-size", type=int, default=DEFAULT_SKELETON_PANEL)
     ap.add_argument("--skeleton-margin", type=int, default=20)
+    ap.add_argument("--no-tts", action="store_true", help="Disable spoken output for predictions")
+    ap.add_argument("--tts-rate", type=int, default=150, help="pyttsx3 speech rate")
+    ap.add_argument("--tts-volume", type=float, default=1.0, help="pyttsx3 volume (0.0–1.0)")
     run_live(ap.parse_args())
     return 0
 

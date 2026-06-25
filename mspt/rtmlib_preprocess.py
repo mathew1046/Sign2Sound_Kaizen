@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from mspt.onnx_gpu_path import configure_onnx_gpu_libs
+from mspt.onnx_gpu_path import configure_onnx_gpu_libs, tune_rtmlib_onnx_sessions
 
 configure_onnx_gpu_libs()
 
@@ -30,6 +30,18 @@ MODEL_NAME = "yolox-x + rtmw-x_384x288"
 DET_INPUT_SIZE = (640, 640)
 POSE_INPUT_SIZE = (288, 384)
 CONF_THRESH = 0.05
+DEFAULT_DET_INTERVAL = 5
+
+
+def _bboxes_from_pose(keypoints) -> list[np.ndarray]:
+    from rtmlib.tools.solution.pose_tracker import pose_to_bbox
+
+    kp = np.asarray(keypoints, dtype=np.float32)
+    if kp.size == 0:
+        return []
+    if kp.ndim == 2:
+        return [pose_to_bbox(kp)]
+    return [pose_to_bbox(kp[i]) for i in range(kp.shape[0])]
 
 
 def pick_best_instance(keypoints, scores) -> tuple[np.ndarray, np.ndarray]:
@@ -124,6 +136,47 @@ def _probe_cuda_provider() -> bool:
         return False
 
 
+def _installed_onnx_packages() -> list[str]:
+    import importlib.metadata as im
+
+    found: list[str] = []
+    for dist in im.distributions():
+        name = (dist.metadata.get("Name") or "").lower()
+        if name in ("onnxruntime", "onnxruntime-gpu"):
+            found.append(f"{name}=={dist.version}")
+    return found
+
+
+def _gpu_fallback_reason() -> str:
+    """Human-readable hint when CUDA pose is unavailable."""
+    try:
+        import onnxruntime as ort
+    except ImportError:
+        return (
+            "onnxruntime not installed — "
+            "pip install onnxruntime-gpu==1.20.2 nvidia-cudnn-cu12"
+        )
+
+    providers = ort.get_available_providers()
+    pkgs = _installed_onnx_packages()
+    has_cpu = any(p.startswith("onnxruntime==") for p in pkgs)
+    has_gpu = any(p.startswith("onnxruntime-gpu==") for p in pkgs)
+    if "CUDAExecutionProvider" not in providers:
+        if has_cpu:
+            return (
+                "plain onnxruntime (CPU) is installed and shadows onnxruntime-gpu — "
+                "pip uninstall onnxruntime && pip install onnxruntime-gpu==1.20.2 nvidia-cudnn-cu12"
+            )
+        if not has_gpu:
+            return (
+                "onnxruntime-gpu not installed — "
+                "pip install onnxruntime-gpu==1.20.2 nvidia-cudnn-cu12"
+            )
+    if not _cudnn_available():
+        return "cuDNN 9 not found — pip install nvidia-cudnn-cu12"
+    return "onnxruntime CUDAExecutionProvider failed session probe (check CUDA driver / onnxruntime-gpu version)"
+
+
 def resolve_device(prefer: str = "cuda") -> str:
     if prefer == "cpu":
         return "cpu"
@@ -135,14 +188,17 @@ def resolve_device(prefer: str = "cuda") -> str:
 class RtmlibWholebodyExtractor:
     """YOLOX-x + RTMW-x wholebody extractor (training-time settings)."""
 
-    def __init__(self, device: str | None = None):
+    def __init__(self, device: str | None = None, det_interval: int = DEFAULT_DET_INTERVAL):
         from rtmlib import Wholebody
 
         requested = device or "cuda"
         self.device = resolve_device(requested)
+        self.det_interval = max(1, int(det_interval))
+        self._frame_idx = 0
+        self._cached_bboxes: list | None = None
         if self.device == "cpu" and requested != "cpu":
             print(
-                "[rtmlib] WARN: onnxruntime GPU unavailable (cuDNN/CUDA libs missing) — "
+                f"[rtmlib] WARN: onnxruntime GPU unavailable ({_gpu_fallback_reason()}) — "
                 "using CPU for pose (MSPT torch inference can still use GPU)"
             )
         self._model = Wholebody(
@@ -154,10 +210,31 @@ class RtmlibWholebodyExtractor:
             device=self.device,
             to_openpose=False,
         )
+        tune_rtmlib_onnx_sessions(self._model, self.device)
+        if self.det_interval > 1:
+            print(f"[rtmlib] det_interval={self.det_interval} (pose every frame, detector every {self.det_interval})")
+
+    def reset_tracking(self) -> None:
+        """Clear cached detector boxes (call at clip boundaries)."""
+        self._frame_idx = 0
+        self._cached_bboxes = None
 
     def process_frame(self, frame_bgr: np.ndarray) -> np.ndarray:
         height, width = frame_bgr.shape[:2]
-        keypoints, scores = self._model(frame_bgr)
+        if self._cached_bboxes is None or self._frame_idx % self.det_interval == 0:
+            bboxes = self._model.det_model(frame_bgr)
+        else:
+            bboxes = self._cached_bboxes
+        keypoints, scores = self._model.pose_model(frame_bgr, bboxes=bboxes)
+        if self.det_interval > 1:
+            pose_bboxes = _bboxes_from_pose(keypoints)
+            if pose_bboxes:
+                self._cached_bboxes = pose_bboxes
+            else:
+                self._cached_bboxes = bboxes
+        else:
+            self._cached_bboxes = bboxes
+        self._frame_idx += 1
         return frame_to_wholebody_array(keypoints, scores, width, height)
 
     def close(self) -> None:

@@ -4,7 +4,10 @@ python-dotenv>=1.0.0
 google-generativeai>=0.8.0
 google-genai>=1.0.0
 rtmlib>=0.0.15
-onnxruntime>=1.17.0
+nvidia-cudnn-cu12>=9.0.0
+# GPU build only — plain onnxruntime (CPU) shadows onnxruntime-gpu and breaks pose CUDA.
+onnxruntime-gpu==1.20.2; platform_system != "Darwin"
+onnxruntime>=1.20.2; platform_system == "Darwin"
 pydantic>=2.0.0
 opencv-python>=4.8.0
 numpy>=1.24.0
