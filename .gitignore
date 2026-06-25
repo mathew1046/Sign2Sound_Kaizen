@@ -96,3 +96,15 @@ logs/
 
 *.npy
 data/processed_normalized/features/*.npy
+
+# Dashboard runtime artifacts
+dashboard/assets/
+dashboard/cache/
+!dashboard/assets/.gitkeep
+!dashboard/cache/.gitkeep
+dashboard/frontend/node_modules/
+dashboard/frontend/dist/
+dashboard/frontend/tsconfig.tsbuildinfo
+dashboard/orientation_progress.json
+collected_data/
+reference_samples/
