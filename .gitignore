@@ -28,6 +28,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.env
 
 # Data
 data/raw/*
@@ -43,6 +44,7 @@ checkpoints/*.pt
 !checkpoints/README.md
 *.pth
 *.pt
+!alphabet_transformer/weights/*.pth
 !checkpoints/mspt/*.pt
 !weights/yolo26/*.pt
 
@@ -97,7 +99,9 @@ logs/
 *.npy
 data/processed_normalized/features/*.npy
 
-# Dashboard runtime artifacts
+# MediaPipe runtime assets (auto-downloaded)
+alphabet_transformer/hand_landmarker.task
+
 dashboard/assets/
 dashboard/cache/
 !dashboard/assets/.gitkeep
