@@ -1,0 +1,17 @@
+glove_to_mspt:
+  "thank you": thank_you
+  "good morning": good_morning
+  big_large: big_large
+  hello: hello
+  happy: happy
+  house: house
+  teacher: teacher
+  i: i
+
+glove_letters:
+  - b
+  - i
+  - o
+
+reject_labels:
+  - rest

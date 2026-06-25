@@ -1,6 +1,7 @@
 import time
 import urllib.request
 from collections import deque
+from pathlib import Path
 
 import cv2
 import mediapipe as mp
@@ -10,6 +11,11 @@ import torch
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from hand_crop import (
+    default_cansik_paths,
+    extract_frame_landmarks,
+    try_create_cansik_detector,
+)
 from model import SignTransformer
 from paths import DEFAULT_WEIGHTS, HAND_LANDMARKER
 
@@ -45,7 +51,16 @@ def get_hand_landmarker():
     return vision.HandLandmarker.create_from_options(options)
 
 
-def run_inference(weights_path=DEFAULT_WEIGHTS, confidence_threshold=0.85):
+def run_inference(
+    weights_path=DEFAULT_WEIGHTS,
+    confidence_threshold=0.85,
+    *,
+    use_crop=True,
+    crop_pad=0.15,
+    hand_det_confidence=0.2,
+    cansik_cfg=None,
+    cansik_weights=None,
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     classes = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
@@ -54,6 +69,13 @@ def run_inference(weights_path=DEFAULT_WEIGHTS, confidence_threshold=0.85):
     model.eval()
 
     landmarker = get_hand_landmarker()
+    cfg_path, weights_path_cansik = cansik_cfg or default_cansik_paths()[0], cansik_weights or default_cansik_paths()[1]
+    detector = try_create_cansik_detector(cfg_path, weights_path_cansik, confidence=hand_det_confidence) if use_crop else None
+    if use_crop and detector is not None:
+        print(f"[inference] hand crop enabled (pad={crop_pad})")
+    elif use_crop:
+        print("[inference] hand crop requested but detector unavailable — full-frame fallback")
+
     cap = cv2.VideoCapture(0)
 
     frame_queue = deque(maxlen=30)
@@ -66,18 +88,13 @@ def run_inference(weights_path=DEFAULT_WEIGHTS, confidence_threshold=0.85):
         if not ret:
             break
 
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
-        results = landmarker.detect(mp_image)
-
-        frame_landmarks = np.zeros((42, 3))
-        if results.hand_landmarks:
-            for hand_idx, hand_lms in enumerate(results.hand_landmarks):
-                hand_label = results.handedness[hand_idx][0].category_name
-                offset = 0 if hand_label == "Left" else 21
-                for i, lm in enumerate(hand_lms):
-                    frame_landmarks[offset + i] = [lm.x, lm.y, lm.z]
-
+        frame_landmarks = extract_frame_landmarks(
+            landmarker,
+            frame,
+            use_crop=use_crop,
+            detector=detector,
+            pad_frac=crop_pad,
+        )
         frame_queue.append(frame_landmarks)
 
         if len(frame_queue) == 30 and (time.time() - last_pred_time > 0.16):
@@ -131,8 +148,27 @@ def run_inference(weights_path=DEFAULT_WEIGHTS, confidence_threshold=0.85):
 if __name__ == "__main__":
     import argparse
 
+    default_cfg, default_weights = default_cansik_paths()
     parser = argparse.ArgumentParser(description="Real-time ISL alphabet inference")
     parser.add_argument("--weights", type=str, default=str(DEFAULT_WEIGHTS))
     parser.add_argument("--confidence", type=float, default=0.85)
+    parser.add_argument(
+        "--crop",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Crop hands with Cansik before MediaPipe (default: on)",
+    )
+    parser.add_argument("--crop-pad", type=float, default=0.15, help="Padding fraction around hand union bbox")
+    parser.add_argument("--hand-det-confidence", type=float, default=0.2, help="Cansik detection threshold")
+    parser.add_argument("--cansik-cfg", type=Path, default=default_cfg)
+    parser.add_argument("--cansik-weights", type=Path, default=default_weights)
     args = parser.parse_args()
-    run_inference(weights_path=args.weights, confidence_threshold=args.confidence)
+    run_inference(
+        weights_path=args.weights,
+        confidence_threshold=args.confidence,
+        use_crop=args.crop,
+        crop_pad=args.crop_pad,
+        hand_det_confidence=args.hand_det_confidence,
+        cansik_cfg=args.cansik_cfg,
+        cansik_weights=args.cansik_weights,
+    )

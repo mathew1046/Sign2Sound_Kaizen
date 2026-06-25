@@ -9,6 +9,7 @@ Real-time Indian Sign Language alphabet recognition (A–Z) using a PyTorch Tran
 | `model.py` | `SignTransformer` architecture with positional encoding |
 | `train.py` | Train on `.pose` class folders |
 | `inference.py` | Webcam inference with TTS |
+| `hand_crop.py` | Cansik hand bbox crop + MediaPipe landmark remap |
 | `convert_pose.py` | Convert raw `.npy` landmark data to `.pose` format |
 | `record_r.py` | Webcam recorder for the missing ISL `R` class |
 | `weights/sign_transformer_alphabet.pth` | Trained weights (26 classes) |
@@ -20,6 +21,14 @@ cd alphabet_transformer
 
 # Real-time inference (space to speak, q to quit)
 python inference.py
+
+# Disable hand cropping (full-frame MediaPipe)
+python inference.py --no-crop
+
+# Hand crop uses Cansik YOLO weights (not bundled). Download to:
+#   ../weights/cansik/cross-hands-yolov4-tiny.weights
+# from https://github.com/cansik/yolo-hand-detection
+# Without weights, inference falls back to full-frame MediaPipe automatically.
 
 # Train (requires .pose dataset on disk, not included in repo)
 python train.py --data-dir /path/to/ISL_pose

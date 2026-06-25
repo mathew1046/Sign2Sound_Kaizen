@@ -264,6 +264,30 @@ python scripts/mspt/rtmlib_live_mspt.py --no-gemini
 python scripts/mspt/rtmlib_live_mspt.py --no-compose
 ```
 
+### Hybrid Fusion (MSPT + Alphabet + Glove)
+
+Runs all three models in parallel with confirm-only glove fusion and optional finger-spelling:
+
+```bash
+export PYTHONPATH=$PWD:$PWD/scripts/mspt
+python scripts/fusion/live_hybrid.py \
+  --video-url http://localhost:8080/video \
+  --checkpoint checkpoints/mspt/mspt_rtmlib_263_best.pt
+```
+
+- **MSPT** is the primary word recognizer; glosses feed `GlossComposer` for natural English TTS.
+- **Glove** (11 classes) confirms overlapping signs only; use `--glove-fallback` to allow glove-only words when MSPT is silent.
+- **Alphabet transformer** handles finger-spelling; press `s` to toggle spell mode, `Space` to speak the spell buffer.
+- Keys: `q` quit | `f` flush composer | `s` spell mode | `Space` speak spell buffer
+
+```bash
+# Without glove hardware
+python scripts/fusion/live_hybrid.py --no-glove --video-url http://localhost:8080/video
+
+# Allow glove-only fallback for overlap vocabulary
+python scripts/fusion/live_hybrid.py --glove-fallback --glove-port /dev/ttyUSB0
+```
+
 ---
 
 # 📷 Demo

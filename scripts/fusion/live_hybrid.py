@@ -1,0 +1,451 @@
+#!/usr/bin/env python3
+"""Hybrid live fusion: MSPT + alphabet transformer + glove (confirm-only).
+
+Usage:
+  cd ~/Arrakis/Sign2Sound_Kaizen
+  export PYTHONPATH=$PWD:$PWD/scripts/mspt
+  python scripts/fusion/live_hybrid.py \\
+    --video-url http://localhost:8080/video \\
+    --checkpoint checkpoints/mspt/mspt_rtmlib_263_best.pt
+
+Keys: q quit | f flush composer | s toggle spell mode | Space flush spell buffer
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+import torch
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPTS_MSPT = REPO_ROOT / "scripts" / "mspt"
+sys.path.insert(0, str(SCRIPTS_MSPT))
+sys.path.insert(0, str(REPO_ROOT))
+
+from fusion.alphabet_worker import AlphabetWorker  # noqa: E402
+from fusion.policy import FusionPolicy  # noqa: E402
+from fusion.vocabulary import FusionVocabulary  # noqa: E402
+from mspt.gloss_compose import GlossComposer, ensure_project_env, gemini_available  # noqa: E402
+from mspt.segmentation import (  # noqa: E402
+    FixedSegmenter,
+    SegmentPhase,
+    add_segmenter_args,
+    make_segmenter,
+    segmenter_config_from_args,
+)
+from repo_paths import MSPT_CHECKPOINTS, REPO_ROOT, RTMLIB_LAB  # noqa: E402
+
+import rtmlib_live_mspt as mspt_live  # noqa: E402
+
+DEFAULT_VIDEO_URL = mspt_live.DEFAULT_VIDEO_URL
+DEFAULT_CKPT = MSPT_CHECKPOINTS / "mspt_rtmlib_263_best.pt"
+DEFAULT_LAB = RTMLIB_LAB
+
+
+def _apply_decision(
+    decision,
+    *,
+    composer: GlossComposer | None,
+    tts: mspt_live.TtsSpeaker | None,
+    now: float,
+) -> None:
+    if decision.action == "accept_mspt" and composer is not None:
+        if decision.meta.get("glove_agreement"):
+            print(f"[fusion] MSPT {decision.gloss} (+ glove agree)")
+        else:
+            print(f"[fusion] MSPT {decision.gloss}")
+        composer.add_gloss(decision.gloss, decision.confidence, now)
+    elif decision.action == "accept_glove" and composer is not None:
+        print(f"[fusion] glove fallback → {decision.gloss} ({decision.reason})")
+        composer.add_gloss(decision.gloss, decision.confidence, now)
+    elif decision.action == "append_letter":
+        print(f"[fusion] spell +{decision.gloss} → {decision.meta.get('spell_buffer', '')}")
+    elif decision.action == "flush_spell" and decision.gloss:
+        print(f"[fusion] speak spell: {decision.gloss}")
+        if tts is not None:
+            tts.speak_text(decision.gloss)
+
+
+def draw_fusion_status(frame, policy: FusionPolicy) -> None:
+    h, _ = frame.shape[:2]
+    y = int(h * 0.30)
+    mode = "SPELL" if policy.spell_mode else "WORD"
+    cv2.putText(
+        frame,
+        f"Mode: {mode}",
+        (16, y),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.75,
+        (255, 180, 80),
+        2,
+        cv2.LINE_AA,
+    )
+    if policy.spell_display:
+        cv2.putText(
+            frame,
+            f"Spell: {policy.spell_display}",
+            (16, y + 32),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.75,
+            (255, 220, 100),
+            2,
+            cv2.LINE_AA,
+        )
+
+
+def run_live(args: argparse.Namespace) -> None:
+    path = ensure_project_env()
+    if path is not None:
+        print(f"[hybrid] loaded env from {path}")
+
+    device = args.device
+    if device == "cuda" and not torch.cuda.is_available():
+        device = "cpu"
+        print("[hybrid] CUDA unavailable for MSPT, using CPU")
+
+    ckpt = args.checkpoint.resolve()
+    lab_root = args.lab_root.resolve()
+    if not ckpt.is_file():
+        raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
+
+    video_url = (args.video_url or args.stream_url).strip()
+    print(f"[hybrid] stream: {video_url}")
+    print(f"[hybrid] checkpoint: {ckpt}")
+
+    tts: mspt_live.TtsSpeaker | None = None
+    if not args.no_tts:
+        tts = mspt_live.TtsSpeaker(rate=args.tts_rate, volume=args.tts_volume)
+
+    use_gemini = not args.no_gemini and gemini_available()
+    composer: GlossComposer | None = None
+    if args.compose:
+
+        def _on_composed(result) -> None:
+            print(f"[compose] {result.source}: {result.speak}")
+            if tts is not None and not args.no_tts and result.speak:
+                tts.speak_text(result.speak)
+
+        composer = GlossComposer(
+            utterance_pause_sec=args.utterance_pause_sec,
+            max_buffer=args.max_gloss_buffer,
+            use_gemini=use_gemini,
+            on_composed=_on_composed,
+            speak_enabled=not args.no_tts,
+        )
+
+    policy = FusionPolicy(
+        vocab=FusionVocabulary(),
+        min_mspt_confidence=args.min_confidence,
+        alphabet_threshold=args.alphabet_confidence,
+        glove_margin_threshold=args.glove_margin,
+        glove_activity_threshold=args.glove_activity,
+        glove_consecutive=args.glove_consecutive,
+        glove_fallback=args.glove_fallback,
+        glove_fallback_silent_sec=args.glove_fallback_silent_sec,
+        spell_mode=args.spell_mode,
+    )
+
+    glove = None
+    if not args.no_glove:
+        from fusion.glove_worker import GloveWorker  # noqa: WPS433
+
+        glove = GloveWorker(
+            port=args.glove_port,
+            margin_threshold=args.glove_margin,
+            activity_threshold=args.glove_activity,
+            consecutive_required=args.glove_consecutive,
+        )
+        if not glove.start():
+            print(f"[hybrid] glove unavailable ({glove.error}); continuing without glove")
+            glove.close()
+            glove = None
+        else:
+            print(f"[hybrid] glove enabled on {args.glove_port} (confirm-only)")
+
+    alphabet: AlphabetWorker | None = None
+    if not args.no_alphabet:
+        alphabet = AlphabetWorker(
+            weights_path=Path(args.alphabet_weights),
+            confidence_threshold=args.alphabet_confidence,
+            use_crop=args.crop,
+            crop_pad=args.crop_pad,
+            hand_det_confidence=args.hand_det_confidence,
+        )
+        if not alphabet.start():
+            print(f"[hybrid] alphabet unavailable ({alphabet.error}); continuing without alphabet")
+            alphabet.close()
+            alphabet = None
+        else:
+            print("[hybrid] alphabet worker enabled")
+
+    extractor = mspt_live.RtmlibWholebodyExtractor(
+        device=args.rtmlib_device, det_interval=args.det_interval
+    )
+    worker = mspt_live.PoseWorker(extractor, args.pose_max_width, unmirror_pose=args.unmirror_pose)
+    model, ckpt_obj, idx_to_label = mspt_live.load_model(ckpt, args.max_seq_len, device, lab_root)
+    print(f"[hybrid] MSPT loaded: {len(idx_to_label)} classes")
+
+    if args.cooldown_sec is not None:
+        pass
+    elif hasattr(args, "gap_sec"):
+        args.cooldown_sec = args.gap_sec
+    if args.conf_on is None:
+        args.conf_on = args.min_confidence
+
+    seg_cfg = segmenter_config_from_args(args)
+    seg_cfg.device = device
+    if args.segmenter_checkpoint is None:
+        default_seg = REPO_ROOT / "checkpoints" / "mspt" / "sign_segmenter_best.pt"
+        if default_seg.is_file():
+            args.segmenter_checkpoint = default_seg
+            seg_cfg.segmenter_checkpoint = default_seg
+
+    def _predict_fn(buf: list[np.ndarray]) -> list[tuple[str, float]]:
+        return mspt_live.predict_clip(
+            model, buf, args.max_seq_len, device, idx_to_label, args.top_k,
+            min_confidence=args.min_confidence,
+        )
+
+    segmenter = make_segmenter(args.segmenter, seg_cfg, predict_fn=_predict_fn)
+    if isinstance(segmenter, FixedSegmenter):
+        segmenter.start_session(time.monotonic())
+    print(f"[hybrid] segmenter={args.segmenter}")
+
+    source, mode = mspt_live.open_video_capture(video_url)
+    grabber = mspt_live.FrameGrabber(source, mode)
+
+    last_preds: list[tuple[str, float]] = []
+    display_preds: list[tuple[str, float]] = []
+    pred_visible_until = 0.0
+    prev_kp: list = []
+    last_motion = 0.0
+    last_hands = np.zeros((42, 2), dtype=np.float32)
+    last_body = np.zeros((33, 2), dtype=np.float32)
+    last_face = np.zeros((68, 2), dtype=np.float32)
+    cached_skel = None
+    phase_elapsed_start = time.monotonic()
+    extract_interval = 1.0 / max(args.fps, 1)
+    display_interval = (1.0 / args.display_fps) if args.display_fps > 0 else 0.0
+    next_extract_time = time.monotonic()
+    next_display_time = time.monotonic()
+    pose_fps_ema = 0.0
+    last_pose_wall = time.monotonic()
+    display_frames = 0
+    display_t0 = time.monotonic()
+    measured_display_fps = 0.0
+    flush_key = ord(args.flush_key) if args.flush_key else ord("f")
+
+    try:
+        while True:
+            now = time.monotonic()
+            if display_interval > 0 and now < next_display_time:
+                if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
+                    break
+                continue
+            if display_interval > 0:
+                next_display_time = now + display_interval
+
+            alive, frame = grabber.read()
+            if not alive and frame is None:
+                print("[hybrid] stream ended")
+                break
+            if frame is None:
+                if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
+                    break
+                continue
+
+            if alphabet is not None:
+                alphabet.submit_frame(frame)
+
+            if glove is not None:
+                for token in glove.poll():
+                    decision = policy.on_glove(token)
+                    _apply_decision(decision, composer=composer, tts=tts, now=time.time())
+
+            if alphabet is not None:
+                for token in alphabet.poll():
+                    decision = policy.on_alphabet(token.gloss, token.confidence, token.timestamp)
+                    _apply_decision(decision, composer=composer, tts=tts, now=token.timestamp)
+
+            if now >= next_extract_time:
+                worker.submit(frame.copy())
+                next_extract_time += extract_interval
+                if now - next_extract_time > extract_interval:
+                    next_extract_time = now + extract_interval
+
+            wb = worker.poll_update()
+            if wb is not None:
+                dt = max(now - last_pose_wall, 1e-6)
+                inst = 1.0 / dt
+                pose_fps_ema = inst if pose_fps_ema == 0 else 0.85 * pose_fps_ema + 0.15 * inst
+                last_pose_wall = now
+
+                hands, body, face = mspt_live.wholebody_to_viz(wb)
+                last_hands, last_body, last_face = hands, body, face
+                cached_skel = mspt_live.render_skeleton_panel(
+                    last_hands, last_body, last_face, panel_size=args.skeleton_panel_size,
+                )
+
+                prev = prev_kp[0] if prev_kp else None
+                cur_kp = np.concatenate([hands.reshape(-1), body.reshape(-1)])
+                last_motion = mspt_live.frame_motion(hands, body, prev)
+                prev_kp.clear()
+                prev_kp.append(cur_kp)
+
+                events = segmenter.update(wb, last_motion, now)
+                for ev in events:
+                    if ev.kind == "end" and ev.buffer:
+                        last_preds = mspt_live.predict_clip(
+                            model, ev.buffer, args.max_seq_len, device, idx_to_label, args.top_k,
+                            min_confidence=args.min_confidence,
+                        )
+                        if last_preds:
+                            display_preds = last_preds
+                            pred_visible_until = now + args.hold_pred_sec
+                        if last_preds and last_preds[0][0] != "uncertain":
+                            gloss, conf = last_preds[0]
+                            decision = policy.on_mspt(gloss, conf, time.time())
+                            _apply_decision(decision, composer=composer, tts=tts, now=time.time())
+                        if isinstance(segmenter, FixedSegmenter):
+                            phase_elapsed_start = now
+                        mspt_live._end_clip([], worker)
+                        prev_kp.clear()
+
+            if composer is not None:
+                composer.tick(now)
+
+            display = frame.copy()
+            display_phase = segmenter.display_phase
+            elapsed_ui = now - phase_elapsed_start
+
+            if isinstance(segmenter, FixedSegmenter):
+                if segmenter.phase == SegmentPhase.HOLD:
+                    if now - phase_elapsed_start >= args.hold_pred_sec:
+                        segmenter.enter_gap(now)
+                        phase_elapsed_start = now
+                elif segmenter.phase == SegmentPhase.GAP:
+                    if now - phase_elapsed_start >= args.gap_sec:
+                        segmenter.enter_recording(now)
+                        phase_elapsed_start = now
+                        mspt_live._end_clip([], worker)
+
+            mspt_live.draw_status_bar(
+                display, display_phase, elapsed_ui, args.clip_sec, args.gap_sec, args.hold_pred_sec,
+                segmenter.n_frames,
+                segmenter.motion_frames, last_motion >= args.motion_threshold,
+                pose_fps_ema, measured_display_fps, extractor.device,
+                segmenter_mode=args.segmenter,
+            )
+            preds_visible = bool(display_preds) and now < pred_visible_until
+            recording_ui = display_phase in ("recording", "signing") and not preds_visible
+            mspt_live.draw_predictions_large(
+                display,
+                display_preds if preds_visible else [],
+                args.top_k,
+                recording=recording_ui,
+            )
+            mspt_live.draw_composer_status(display, composer)
+            draw_fusion_status(display, policy)
+            if cached_skel is not None:
+                mspt_live.composite_bottom_left(display, cached_skel, margin=args.skeleton_margin)
+            cv2.imshow(args.window, display)
+
+            display_frames += 1
+            if now - display_t0 >= 1.0:
+                measured_display_fps = display_frames / (now - display_t0)
+                display_frames = 0
+                display_t0 = now
+
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), 27):
+                break
+            if composer is not None and key == flush_key:
+                composer.flush()
+            if key == ord("s"):
+                enabled = policy.toggle_spell_mode()
+                print(f"[hybrid] spell mode {'ON' if enabled else 'OFF'}")
+            if key == ord(" "):
+                decision = policy.flush_spell_buffer()
+                _apply_decision(decision, composer=composer, tts=tts, now=time.time())
+    except KeyboardInterrupt:
+        print("\n[hybrid] stopped")
+    finally:
+        if composer is not None:
+            composer.close()
+        if tts is not None:
+            tts.close()
+        if glove is not None:
+            glove.close()
+        if alphabet is not None:
+            alphabet.close()
+        grabber.stop()
+        worker.close()
+        extractor.close()
+        if mode == "cv2":
+            source.release()
+        cv2.destroyAllWindows()
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Hybrid MSPT + alphabet + glove fusion")
+    ap.add_argument("--video-url", "--stream-url", default=DEFAULT_VIDEO_URL, dest="video_url")
+    ap.add_argument("--checkpoint", type=Path, default=DEFAULT_CKPT)
+    ap.add_argument("--lab-root", type=Path, default=DEFAULT_LAB)
+    ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--rtmlib-device", default=None)
+    ap.add_argument("--pose-max-width", type=int, default=mspt_live.DEFAULT_POSE_MAX_WIDTH)
+    ap.add_argument("--det-interval", type=int, default=5)
+    ap.add_argument("--clip-sec", type=float, default=mspt_live.DEFAULT_CLIP_SEC)
+    ap.add_argument("--gap-sec", type=float, default=mspt_live.DEFAULT_GAP_SEC)
+    ap.add_argument("--hold-pred-sec", type=float, default=mspt_live.DEFAULT_HOLD_PRED_SEC)
+    ap.add_argument("--fps", type=int, default=mspt_live.DEFAULT_FPS)
+    ap.add_argument("--display-fps", type=int, default=mspt_live.DEFAULT_DISPLAY_FPS)
+    ap.add_argument("--max-seq-len", type=int, default=96)
+    ap.add_argument("--min-frames", type=int, default=8)
+    ap.add_argument("--min-motion-frames", type=int, default=6)
+    ap.add_argument("--motion-threshold", type=float, default=mspt_live.DEFAULT_MOTION_THRESHOLD)
+    ap.add_argument("--min-confidence", type=float, default=mspt_live.DEFAULT_MIN_CONFIDENCE)
+    ap.add_argument("--top-k", type=int, default=3)
+    ap.add_argument("--window", default="Sign2Sound Hybrid")
+    ap.add_argument("--unmirror-pose", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--skeleton-panel-size", type=int, default=mspt_live.DEFAULT_SKELETON_PANEL)
+    ap.add_argument("--skeleton-margin", type=int, default=20)
+    ap.add_argument("--no-tts", action="store_true")
+    ap.add_argument("--tts-rate", type=int, default=150)
+    ap.add_argument("--tts-volume", type=float, default=1.0)
+    ap.add_argument("--compose", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--utterance-pause-sec", type=float, default=mspt_live.DEFAULT_UTTERANCE_PAUSE_SEC)
+    ap.add_argument("--max-gloss-buffer", type=int, default=mspt_live.DEFAULT_MAX_GLOSS_BUFFER)
+    ap.add_argument("--no-gemini", action="store_true")
+    ap.add_argument("--flush-key", default=mspt_live.DEFAULT_FLUSH_KEY)
+
+    ap.add_argument("--no-glove", action="store_true")
+    ap.add_argument("--glove-port", default="/dev/ttyUSB0")
+    ap.add_argument("--glove-fallback", action="store_true",
+                    help="Allow glove-only overlap words when MSPT silent")
+    ap.add_argument("--glove-fallback-silent-sec", type=float, default=3.0)
+    ap.add_argument("--glove-margin", type=float, default=0.25)
+    ap.add_argument("--glove-activity", type=float, default=0.02)
+    ap.add_argument("--glove-consecutive", type=int, default=5)
+
+    ap.add_argument("--no-alphabet", action="store_true")
+    ap.add_argument("--alphabet-weights", type=str,
+                    default=str(REPO_ROOT / "alphabet_transformer" / "weights" / "sign_transformer_alphabet.pth"))
+    ap.add_argument("--alphabet-confidence", type=float, default=0.85)
+    ap.add_argument("--spell-mode", action="store_true", help="Start in spell mode")
+    ap.add_argument("--crop", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--crop-pad", type=float, default=0.15)
+    ap.add_argument("--hand-det-confidence", type=float, default=0.2)
+
+    add_segmenter_args(ap)
+    run_live(ap.parse_args())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

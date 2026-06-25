@@ -57,6 +57,14 @@ from mspt.rtmlib_preprocess import (  # noqa: E402
     RtmlibWholebodyExtractor,
 )
 from mspt.gloss_compose import GlossComposer, ensure_project_env, env_status, gemini_available  # noqa: E402
+from mspt.segmentation import (  # noqa: E402
+    FixedSegmenter,
+    SegmentPhase,
+    add_segmenter_args,
+    frame_motion,
+    make_segmenter,
+    segmenter_config_from_args,
+)
 from mspt.skeleton_viz import composite_bottom_left, render_skeleton_panel  # noqa: E402
 
 DEFAULT_VIDEO_URL = "http://localhost:8080/video"
@@ -333,16 +341,6 @@ def wholebody_to_viz(wb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray
     return hands, body, face
 
 
-def frame_motion(hands: np.ndarray, body: np.ndarray, prev: np.ndarray | None) -> float:
-    cur = np.concatenate([hands.reshape(-1), body.reshape(-1)])
-    if prev is None or prev.shape != cur.shape:
-        return 0.0
-    valid = (cur != 0) & (prev != 0)
-    if not valid.any():
-        return 0.0
-    return float(np.mean(np.abs(cur[valid] - prev[valid])))
-
-
 def open_video_capture(video_url: str) -> tuple[cv2.VideoCapture | str, str]:
     cap = cv2.VideoCapture(video_url, cv2.CAP_FFMPEG)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -536,6 +534,7 @@ def draw_status_bar(
     pose_fps: float,
     display_fps: float,
     rtmlib_device: str,
+    segmenter_mode: str = "fixed",
 ) -> None:
     h, w = frame.shape[:2]
     bar_h = 56
@@ -552,6 +551,9 @@ def draw_status_bar(
     elif phase == "hold":
         color = (0, 255, 120)
         msg = f"PREDICTION {elapsed:.1f}/{hold_pred_sec:.1f}s"
+    elif phase in ("idle", "signing", "cooldown"):
+        color = (0, 0, 255) if phase == "signing" and moving else (120, 120, 120)
+        msg = f"[{segmenter_mode}] {phase.upper()} buf={n_frames} motion_frames={motion_frames}"
     else:
         color = (0, 255, 255)
         msg = f"READY — next clip in {max(0.0, gap_sec - elapsed):.1f}s"
@@ -561,6 +563,24 @@ def draw_status_bar(
     msg += "  |  q quit"
     cv2.circle(frame, (20, 28), 8, color, -1)
     cv2.putText(frame, msg, (38, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 2, cv2.LINE_AA)
+
+
+def _process_segment_end(
+    buffer: list[np.ndarray],
+    model: MSPT,
+    args: argparse.Namespace,
+    device: str,
+    idx_to_label: dict[int, str],
+    tts: TtsSpeaker | None,
+    composer: GlossComposer | None,
+    now: float,
+) -> list[tuple[str, float]]:
+    if not buffer:
+        return []
+    return predict_clip(
+        model, buffer, args.max_seq_len, device, idx_to_label, args.top_k,
+        min_confidence=args.min_confidence,
+    )
 
 
 def run_live(args: argparse.Namespace) -> None:
@@ -578,9 +598,24 @@ def run_live(args: argparse.Namespace) -> None:
     video_url = (args.video_url or args.stream_url).strip()
     print(f"[live] stream: {video_url}")
     print(f"[live] checkpoint: {ckpt} ({lab_root})")
+    if args.cooldown_sec is not None:
+        pass
+    elif hasattr(args, "gap_sec"):
+        args.cooldown_sec = args.gap_sec
+    if args.conf_on is None:
+        args.conf_on = args.min_confidence
+
+    seg_cfg = segmenter_config_from_args(args)
+    seg_cfg.device = device
+    if args.segmenter_checkpoint is None:
+        default_seg = REPO_ROOT / "checkpoints" / "mspt" / "sign_segmenter_best.pt"
+        if default_seg.is_file():
+            args.segmenter_checkpoint = default_seg
+            seg_cfg.segmenter_checkpoint = default_seg
+
     print(
         f"[live] clip={args.clip_sec}s gap={args.gap_sec}s hold={args.hold_pred_sec}s "
-        f"fps={args.fps} motion>={args.motion_threshold}"
+        f"fps={args.fps} motion>={args.motion_threshold} segmenter={args.segmenter}"
     )
     tts: TtsSpeaker | None = None
     if not args.no_tts:
@@ -621,25 +656,29 @@ def run_live(args: argparse.Namespace) -> None:
     model, ckpt_obj, idx_to_label = load_model(ckpt, args.max_seq_len, device, lab_root)
     print(f"[live] MSPT loaded: {len(idx_to_label)} classes, val={ckpt_obj.get('val_acc')}")
 
+    def _predict_fn(buf: list[np.ndarray]) -> list[tuple[str, float]]:
+        return predict_clip(
+            model, buf, args.max_seq_len, device, idx_to_label, args.top_k,
+            min_confidence=args.min_confidence,
+        )
+
+    segmenter = make_segmenter(args.segmenter, seg_cfg, predict_fn=_predict_fn)
+    if isinstance(segmenter, FixedSegmenter):
+        segmenter.start_session(time.monotonic())
+
     source, mode = open_video_capture(video_url)
     grabber = FrameGrabber(source, mode)
 
-    wb_buf: list[np.ndarray] = []
     last_preds: list[tuple[str, float]] = []
     display_preds: list[tuple[str, float]] = []
     pred_visible_until = 0.0
     prev_kp: list[np.ndarray] = []
     last_motion = 0.0
-    motion_frames = 0
     last_hands = np.zeros((42, 2), dtype=np.float32)
     last_body = np.zeros((33, 2), dtype=np.float32)
     last_face = np.zeros((68, 2), dtype=np.float32)
     cached_skel: np.ndarray | None = None
-
-    phase = "recording"
-    clip_start = time.monotonic()
-    gap_start = 0.0
-    hold_start = 0.0
+    phase_elapsed_start = time.monotonic()
     extract_interval = 1.0 / max(args.fps, 1)
     display_interval = (1.0 / args.display_fps) if args.display_fps > 0 else 0.0
     next_extract_time = time.monotonic()
@@ -693,91 +732,64 @@ def run_live(args: argparse.Namespace) -> None:
                 last_motion = frame_motion(hands, body, prev)
                 prev_kp.clear()
                 prev_kp.append(cur_kp)
-                moving = last_motion >= args.motion_threshold
 
-                if phase == "recording":
-                    if moving:
-                        wb_buf.append(wb)
-                        motion_frames += 1
-                    elapsed = now - clip_start
-                    if elapsed >= args.clip_sec:
-                        if motion_frames >= args.min_motion_frames and len(wb_buf) >= args.min_frames:
-                            last_preds = predict_clip(
-                                model, wb_buf, args.max_seq_len, device, idx_to_label, args.top_k,
-                                min_confidence=args.min_confidence,
-                            )
-                            if last_preds:
-                                display_preds = last_preds
-                                pred_visible_until = now + args.hold_pred_sec
-                            _on_clip_prediction(tts, composer, last_preds, now)
-                            hold_start = now
-                            phase = "hold"
-                        else:
-                            last_preds = []
-                        _end_clip(wb_buf, worker)
-                        prev_kp.clear()
-                        motion_frames = 0
-                        gap_start = now
-                        phase = "gap"
-
-            elif phase == "recording":
-                elapsed = now - clip_start
-                if elapsed >= args.clip_sec:
-                    if motion_frames >= args.min_motion_frames and len(wb_buf) >= args.min_frames:
-                        last_preds = predict_clip(
-                            model, wb_buf, args.max_seq_len, device, idx_to_label, args.top_k,
-                            min_confidence=args.min_confidence,
+                events = segmenter.update(wb, last_motion, now)
+                for ev in events:
+                    if ev.kind == "end" and ev.buffer:
+                        last_preds = _process_segment_end(
+                            ev.buffer, model, args, device, idx_to_label,
+                            tts, composer, now,
                         )
                         if last_preds:
                             display_preds = last_preds
                             pred_visible_until = now + args.hold_pred_sec
                         _on_clip_prediction(tts, composer, last_preds, now)
-                        hold_start = now
-                        phase = "hold"
-                    else:
-                        last_preds = []
-                    _end_clip(wb_buf, worker)
-                    prev_kp.clear()
-                    motion_frames = 0
-                    gap_start = now
-                    phase = "gap"
-
-            if phase == "hold":
-                if (now - hold_start) >= args.hold_pred_sec:
-                    gap_start = now
-                    phase = "gap"
-
-            if phase == "gap":
-                elapsed = now - gap_start
-                if elapsed >= args.gap_sec:
-                    _end_clip(wb_buf, worker)
-                    prev_kp.clear()
-                    motion_frames = 0
-                    phase = "recording"
-                    clip_start = now
+                        if isinstance(segmenter, FixedSegmenter):
+                            phase_elapsed_start = now
+                        _end_clip([], worker)
+                        prev_kp.clear()
 
             if composer is not None:
                 composer.tick(now)
 
             display = frame.copy()
-            if phase == "recording":
-                elapsed_ui = now - clip_start
-            elif phase == "hold":
-                elapsed_ui = now - hold_start
+            display_phase = segmenter.display_phase
+            if display_phase == "recording":
+                elapsed_ui = now - phase_elapsed_start
+            elif display_phase == "hold":
+                elapsed_ui = now - phase_elapsed_start
+            elif display_phase == "gap":
+                elapsed_ui = now - phase_elapsed_start
+            elif display_phase == "cooldown":
+                elapsed_ui = now - phase_elapsed_start
             else:
-                elapsed_ui = now - gap_start
+                elapsed_ui = 0.0
+
+            if isinstance(segmenter, FixedSegmenter):
+                if segmenter.phase == SegmentPhase.HOLD:
+                    if now - phase_elapsed_start >= args.hold_pred_sec:
+                        segmenter.enter_gap(now)
+                        phase_elapsed_start = now
+                elif segmenter.phase == SegmentPhase.GAP:
+                    if now - phase_elapsed_start >= args.gap_sec:
+                        segmenter.enter_recording(now)
+                        phase_elapsed_start = now
+                        _end_clip([], worker)
+
             draw_status_bar(
-                display, phase, elapsed_ui, args.clip_sec, args.gap_sec, args.hold_pred_sec,
-                len(wb_buf),
-                motion_frames, last_motion >= args.motion_threshold,
+                display, display_phase, elapsed_ui, args.clip_sec, args.gap_sec, args.hold_pred_sec,
+                segmenter.n_frames,
+                segmenter.motion_frames, last_motion >= args.motion_threshold,
                 pose_fps_ema, measured_display_fps, extractor.device,
+                segmenter_mode=args.segmenter,
             )
             preds_visible = bool(display_preds) and now < pred_visible_until
+            recording_ui = display_phase in ("recording", "signing") and not preds_visible
             draw_predictions_large(
                 display,
                 display_preds if preds_visible else [],
                 args.top_k,
-                recording=(phase == "recording" and not preds_visible),
+                recording=recording_ui,
             )
             draw_composer_status(display, composer)
             if cached_skel is not None:
@@ -881,6 +893,7 @@ def main() -> int:
         default=DEFAULT_FLUSH_KEY,
         help="Key to force-flush the gloss buffer (default: f)",
     )
+    add_segmenter_args(ap)
     run_live(ap.parse_args())
     return 0
 
