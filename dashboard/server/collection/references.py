@@ -8,7 +8,7 @@ from pathlib import Path
 
 from dashboard.config import (
     INCLUDE50_LAB_ROOT,
-    INCLUDE50_VIDEO_ROOT,
+    get_include50_video_root,
     REFERENCE_COUNT,
     REFERENCE_SAMPLES_DIR,
     REFERENCE_ZIP,
@@ -59,7 +59,7 @@ def _refs_from_manifests(word: str) -> list[Path]:
 
 
 def _refs_from_include50(word: str) -> list[Path]:
-    include_dir = INCLUDE50_VIDEO_ROOT
+    include_dir = get_include50_video_root()
     if not include_dir.is_dir():
         return []
     display = word.replace("_", " ")

@@ -16,7 +16,7 @@ from dashboard.config import (
     EVALS_DIR,
     INCLUDE50_LAB_ROOT,
     INCLUDE50_VIDEO_MANIFEST_ROOT,
-    INCLUDE50_VIDEO_ROOT,
+    get_include50_video_root,
     PROJECT_ROOT,
     TRANSCODE_CACHE_DIR,
     load_corpus_vocabulary,
@@ -64,7 +64,8 @@ class Include50Corpus:
     ):
         self.lab_root = Path(lab_root or INCLUDE50_LAB_ROOT)
         self.video_manifest_root = Path(video_manifest_root or INCLUDE50_VIDEO_MANIFEST_ROOT)
-        self.video_root = Path(video_root or INCLUDE50_VIDEO_ROOT)
+        self._video_root_override = Path(video_root) if video_root is not None else None
+        self._video_root_cached: Path | None = None
         self.cache_dir = self.lab_root / "cache"
         self.wholebody_dir = self.cache_dir / "wholebody"
         self.landmarks_dir = self.cache_dir / "landmarks"
@@ -78,6 +79,25 @@ class Include50Corpus:
         self._video_by_stem: dict[str, Path] | None = None
         self._stem_video_index: dict[str, Path] | None = None
         self._lab_manifest_paths: dict[tuple[str, str], str] | None = None
+
+    @property
+    def video_root(self) -> Path:
+        root = self._video_root_override or get_include50_video_root()
+        if self._video_root_cached != root:
+            self._video_root_cached = root
+            self._invalidate_video_caches()
+        return root
+
+    def _invalidate_video_caches(self) -> None:
+        self._clips = None
+        self._video_by_word_stem = None
+        self._video_by_stem = None
+        self._stem_video_index = None
+
+    def refresh_video_index(self) -> None:
+        """Re-scan RGB video root (e.g. after external drive is mounted)."""
+        self._video_root_cached = None
+        self._invalidate_video_caches()
 
     def _load_lab_manifest_paths(self) -> dict[tuple[str, str], str]:
         if self._lab_manifest_paths is not None:
@@ -118,8 +138,12 @@ class Include50Corpus:
             candidates.append(self.video_root / category / rest)
             if self.video_root.is_dir():
                 for shard in sorted(self.video_root.iterdir()):
-                    if shard.is_dir() and shard.name.startswith(f"{category}_"):
+                    if not shard.is_dir():
+                        continue
+                    if shard.name.startswith(f"{category}_") or shard.name == category:
                         candidates.append(shard / category / rest)
+                        # Some trees omit the repeated category folder.
+                        candidates.append(shard / rest)
 
         for c in candidates:
             if c.is_file():
