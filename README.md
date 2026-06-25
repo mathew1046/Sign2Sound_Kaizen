@@ -1,318 +1,327 @@
-# Team Kaizen - Sign Language Recognition System
+# 🤟 GloveTalk: AI-Powered Sign Language Translation System
 
-**BiLSTM-based Sign Language Recognition for ISL**
+> **A real-time assistive communication system that translates sign language into speech using Multi-Stream Pose Transformers, Computer Vision, and Embedded Wearable Hardware.**
 
-![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-
-## 🎯 Project Overview
-
-A production-ready sign language recognition system achieving **98%+ test accuracy** using Bidirectional LSTM networks. The system recognizes 25 ISL classes:
-- **Indian Sign Language** (Classes 0-24): A-Z (excluding R)
-
-## 🏗️ Architecture
-
-### BiLSTM Model Specifications
-- **Parameters**: 2.53M (12.8 MB)
-- **Architecture**: 2-layer Bidirectional LSTM + 3 FC layers
-- **Input**: 126-dimensional feature vectors (2 hands × 21 landmarks × 3 coords)
-- **Output**: 25 classes
-- **Inference Speed**: 8ms per sample, 35 FPS real-time
-
-```
-Input (60, 126) 
-    ↓
-BiLSTM (hidden=256, layers=2)
-    ↓
-Dropout (0.3)
-    ↓
-FC1 (512 → 256) + ReLU + Dropout
-    ↓
-FC2 (256 → 128) + ReLU + Dropout
-    ↓
-FC3 (128 → 25)
-    ↓
-Output (25 classes)
-```
-
-## 📊 Performance
-
-| Metric | Score |
-|--------|-------|
-| Test Accuracy | 98.41% |
-| Precision (Macro) | 91.1% |
-| Recall (Macro) | 93.7% |
-| F1-Score (Macro) | 92.0% |
-| Training Time | ~12 minutes |
-| Real-time FPS | 25-30 |
-
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd SIGN2SOUND_Kaizen
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Dataset Setup
-
-1. Download the dataset:
-    - ISL dataset (.npy files)
-
-2. Organize the data structure:
-```
-datasets/
-└── ISL/
-    └── data/
-        ├── A/
-        ├── B/
-        └── ...
-```
-
-### Preprocessing
-
-```bash
-# Extract features and create train/val/test splits
-python preprocessing/preprocess.py \
-    --isl_path /path/to/ISL \
-    --output data/processed
-```
-
-This will:
-- Extract MediaPipe hand landmarks from images
-- Apply POV flip augmentation
-- Create stratified 70/15/15 train/val/test splits
-
-### Training
-
-```bash
-# Train the BiLSTM model
-python training/train.py --config training/config.yaml
-
-# Monitor training (outputs saved to results/)
-```
-
-Expected training time: 12-15 minutes on modern GPU
-
-### Evaluation
-
-```bash
-# Evaluate on test set
-python training/evaluate.py --model checkpoints/best_model.pth
-
-# Generates:
-# - Confusion matrix (results/confusion_matrix.png)
-# - Per-class metrics (results/per_class_performance.csv)
-# - Training curves (results/loss_curves.png, results/accuracy_curves.png)
-```
-
-### Inference
-
-**Single Image Prediction:**
-```bash
-python inference/infer.py \
-    --model checkpoints/best_model.pth \
-    --input path/to/image.jpg
-```
-
-**Real-time Webcam Demo:**
-```bash
-python inference/realtime_demo.py --model checkpoints/best_model.pth
-```
-
-Controls:
-- **Space**: Capture prediction and add to sentence
-- **C**: Clear accumulated text
-- **Q**: Quit
-
-## 📁 Repository Structure
-
-```
-SIGN2SOUND_Kaizen/
-├── README.md
-├── requirements.txt
-├── LICENSE
-├── .gitignore
-│
-├── data/
-│   ├── processed/          # Processed features and splits
-│   ├── README.md
-│   └── statistics.txt
-│
-├── preprocessing/
-│   ├── preprocess.py       # Main preprocessing pipeline
-│   ├── augmentation.py     # Data augmentation techniques
-│   ├── extract_features.py # MediaPipe feature extraction
-│   └── README.md
-│
-├── features/
-│   ├── hand_landmarks.py   # MediaPipe hand detection
-│   ├── feature_utils.py    # Padding, masking utilities
-│   ├── pose_estimation.py  # Placeholder for future use
-│   ├── facial_features.py  # Placeholder for future use
-│   └── README.md
-│
-├── models/
-│   ├── model.py           # BiLSTM architecture
-│   ├── loss.py            # Weighted loss functions
-│   ├── custom_layers.py   # Custom layer implementations
-│   └── README.md
-│
-├── training/
-│   ├── train.py           # Training pipeline
-│   ├── config.yaml        # Hyperparameters
-│   ├── callbacks.py       # Early stopping, checkpointing
-│   ├── evaluate.py        # Model evaluation
-│   └── README.md
-│
-├── inference/
-│   ├── infer.py           # Single/batch inference
-│   ├── realtime_demo.py   # Webcam demo
-│   ├── tts.py             # Text-to-speech
-│   ├── utils.py           # Inference utilities
-│   └── README.md
-│
-├── notebooks/
-│   ├── 01_data_exploration.ipynb
-│   ├── 02_model_experiments.ipynb
-│   ├── 03_results_visualization.ipynb
-│   └── README.md
-│
-├── tests/
-│   ├── test_preprocessing.py
-│   ├── test_model.py
-│   └── test_inference.py
-│
-├── scripts/
-│   ├── setup_environment.sh
-│   └── run_all.sh
-│
-├── checkpoints/
-│   └── README.md
-│
-├── results/
-│   └── sample_outputs/
-│
-└── docs/
-    ├── architecture_diagram.png
-    ├── system_pipeline.png
-    ├── dataset_preprocessing.md
-    └── training_details.md
-```
-
-## 🔬 Key Features
-
-### Preprocessing Pipeline
-- **MediaPipe Hands**: Extract 126-dimensional features (21 landmarks × 2 hands × 3 coords)
-- **Augmentation**: 6 techniques available (POV flip used by default)
-  - Gaussian noise (σ=0.01-0.03)
-  - Scale variation (0.85-1.15)
-  - Translation (±0.1)
-  - Rotation (±15°)
-  - Horizontal flip
-  - Temporal speed variation (0.8-1.2x)
-
-### Training Features
-- **Weighted Cross-Entropy Loss**: Handles class imbalance
-- **Packed Sequences**: Efficient variable-length handling
-- **Gradient Clipping**: Prevents exploding gradients (max_norm=1.0)
-- **Early Stopping**: Patience=7, monitors validation loss
-- **Learning Rate Scheduling**: ReduceLROnPlateau
-- **Checkpointing**: Saves best and periodic models
-
-### Real-time Inference
-- **5-frame Prediction Smoothing**: Reduces jitter
-- **Confidence Thresholding**: 0.7 minimum confidence
-- **Text-to-Speech**: Converts predictions to audio
-- **Performance**: 25-30 FPS with MediaPipe optimization
-
-## 📈 Results
-
-### Overall Performance
-- **Test Accuracy**: 98.41%
-- **Convergence**: 22 epochs (best at epoch 15)
-- **Training Time**: 12.5 minutes on NVIDIA GPU
-
-### Per-Category Accuracy
-- **ISL Classes (0-24)**: 98-99%
-
-## 🛠️ Technical Details
-
-### Hardware Requirements
-- **Training**: NVIDIA GPU with 8GB+ VRAM (or CPU with longer training time)
-- **Inference**: CPU-compatible (GPU recommended for real-time)
-- **Storage**: ~2GB for processed data + models
-
-### Software Requirements
-- Python 3.8+
-- PyTorch 2.0+
-- MediaPipe 0.10+
-- OpenCV 4.5+
-- See [requirements.txt](requirements.txt) for full list
-
-## 🐛 Troubleshooting
-
-**Issue: MediaPipe fails to detect hands**
-- Solution: Adjust `min_detection_confidence` in config (default: 0.3)
-
-**Issue: Out of memory during training**
-- Solution: Reduce batch_size in `training/config.yaml` (try 32 or 16)
-
-**Issue: Low accuracy on some classes**
-- Solution: Increase training data or apply additional augmentation
-
-**Issue: Slow real-time inference**
-- Solution: Ensure GPU is available, reduce frame resolution
-
-## 📚 Citation
-
-If you use this work, please cite:
-
-```bibtex
-@software{kaizen_sign2sound_2026,
-  author = {Team Kaizen},
-    title = {BiLSTM-based Sign Language Recognition for ISL},
-  year = {2026},
-  url = {<repository-url>}
-}
-```
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 👥 Team Kaizen
-
-- Developed for sign language accessibility
-- Focus on Indian Sign Language (ISL)
-- Target: Real-time, production-ready system
-
-## 📞 Support
-
-For issues and questions:
-- Create an issue in the repository
-- Check [docs/](docs/) for detailed documentation
-- Review [notebooks/](notebooks/) for examples
+![ESP32](https://img.shields.io/badge/ESP32-Embedded-green.svg)
+![RTMLib](https://img.shields.io/badge/RTMLib-WholeBody%20Pose-orange.svg)
+![License](https://img.shields.io/badge/License-MIT-brightgreen.svg)
 
 ---
 
-**Status**: ✅ Production Ready | **Accuracy**: 98.41% | **Real-time**: 30 FPS
+## 📖 Overview
+
+GloveTalk is an AI-powered real-time sign language translation system developed by **Team Kaizen** for the IEEE SPS **Sign2Sound** competition.
+
+The system combines computer vision, wearable embedded hardware, and deep learning to recognize sign language gestures and convert them into natural speech. Unlike traditional vision-only or glove-only approaches, GloveTalk adopts a **hybrid architecture**, combining wearable sensors with AI-based pose estimation to improve robustness and usability.
+
+---
+
+## ✨ Features
+
+- 🧠 Multi-Stream Pose Transformer (MSPT)
+- 🤖 RTMLib Whole-Body Pose Estimation
+- ✋ Wearable Smart Glove with ESP32
+- 📡 Wireless Sensor Communication
+- 🎯 263 Sign Language Classes
+- 🔊 Real-Time Speech Output
+- ⚡ Low-Latency Inference
+- 🧩 Modular Hardware & Software Architecture
+
+---
+
+# 🏗 System Architecture
+
+```
+                    CAMERA
+                       │
+                       ▼
+            RTMLib Pose Estimation
+                       │
+                       ▼
+      Multi-Stream Pose Transformer
+                       │
+                       ▼
+            Gesture Classification
+                       │
+                       ▼
+            Sentence Formation
+                       │
+                       ▼
+              Text-to-Speech Output
+```
+
+### Wearable Hardware
+
+```
+ Flex Sensors + BNO086 IMU
+            │
+            ▼
+         ESP32 MCU
+            │
+      ESP-NOW / USB
+            │
+            ▼
+      AI Inference Engine
+```
+# 🛠️ Hardware
+
+GloveTalk uses a dual-glove wearable architecture to capture both finger articulation and hand orientation in real time. Each glove functions as an independent sensing unit, with data synchronized wirelessly for AI-based gesture recognition.
+
+## Hardware Components
+
+| Component | Quantity | Purpose |
+|-----------|:--------:|---------|
+| ESP32 Development Board | 2 | Wireless data acquisition and communication |
+| Flex Sensors | 10 | Individual finger bend measurement (5 per glove) |
+| BNO08X 9-DOF IMU | 2 | Hand orientation and motion tracking |
+| Li-ion Battery | 2 | Portable power supply |
+| Wearable Gloves | 2 | Sensor mounting platform |
+| Jumper Wires & Connectors | As required | Hardware interconnections |
+
+---
+
+## Hardware Architecture
+
+```
+          LEFT GLOVE                     RIGHT GLOVE
+     ┌────────────────┐            ┌────────────────┐
+     │ 5 Flex Sensors │            │ 5 Flex Sensors │
+     │   BNO08X IMU   │            │   BNO08X IMU   │
+     │     ESP32      │ ─ESP-NOW→  │     ESP32      │
+     └────────────────┘            └────────────────┘
+                                             │
+                                             │ USB/UART
+                                             ▼
+                                   AI Inference (Python)
+                                             │
+                                             ▼
+                                    Text-to-Speech Output
+```
+
+---
+
+## Sensor Configuration
+
+Each glove captures:
+
+- **5 Flex Sensor values** (Thumb, Index, Middle, Ring, Little finger)
+- **Quaternion orientation** from the BNO08X IMU
+- **Real-time synchronized sensor stream** via ESP-NOW
+
+This produces **18 sensor features per frame**, providing comprehensive information about both finger posture and hand orientation.
+
+---
+# 🧠 AI Models
+
+The wearable system employs a hybrid machine learning architecture, selecting the most suitable model based on the type of sign being recognized.
+
+| Model | Purpose | Input | Output |
+|-------|---------|-------|--------|
+| **Random Forest Classifier** | Static sign recognition (alphabets) | Single-frame sensor features (Flex + BNO086) | Alphabet prediction |
+| **Long Short-Term Memory (LSTM)** | Dynamic gesture recognition (words & phrases) | 50-frame temporal sensor sequence | Dynamic sign prediction |
+
+### Model Pipeline
+
+```
+Sensor Acquisition
+(Flex Sensors + BNO086)
+          │
+          ▼
+Feature Extraction
+          │
+          ├──────────────► Random Forest
+          │                 (Static Signs)
+          │
+          └──────────────► LSTM
+                            (Dynamic Signs)
+          │
+          ▼
+Confidence Filtering
+          │
+          ▼
+Text-to-Speech Output
+```
+
+### Model Highlights
+
+- **Random Forest**
+  - Lightweight and low-latency
+  - Optimized for static alphabet recognition
+  - Minimal computational overhead
+
+- **LSTM Neural Network**
+  - Processes temporal sequences of **50 consecutive frames**
+  - Learns motion patterns rather than individual poses
+  - Suitable for dynamic gestures such as words and short phrases
+
+- **Inference Engine**
+  - Confidence-based prediction filtering
+  - Sliding window inference
+  - Real-time speech generation using **pyttsx3**
+## Key Hardware Features
+
+- 📡 Dual-ESP32 wireless architecture using **ESP-NOW**
+- ✋ Independent tracking of all ten fingers
+- 🧭 High-precision **9-DOF orientation sensing** with BNO08X
+- ⚡ Low-latency embedded communication
+- 🔧 Automatic flex sensor calibration stored in ESP32 Flash Memory
+- 📈 Real-time signal smoothing and sensor validation for stable predictions
+- 🔋 Portable wearable design for untethered operation
+---
+
+# 🧠 AI Pipeline
+
+| Component | Technology |
+|-----------|------------|
+| Pose Estimation | RTMLib |
+| Object Detection | YOLOX-X |
+| Whole-Body Pose | RTMW-X |
+| Recognition Model | Multi-Stream Pose Transformer |
+| Framework | PyTorch |
+| Input | 133 Whole-Body Keypoints |
+| Output | 263 Sign Classes |
+
+---
+
+# 🔧 Hardware
+
+- ESP32 Development Board
+- BNO086 9-DOF IMU
+- Flex Sensors
+- Li-ion Battery
+- Wearable Smart Glove
+- USB/UART Communication
+
+---
+
+# 📊 Model Performance
+
+| Metric | Value |
+|---------|------:|
+| Sign Classes | **263** |
+| Validation Accuracy | **94.30%** |
+| Model Parameters | **3.55 Million** |
+| Pose Keypoints | **133** |
+| Inference | Real-Time |
+
+---
+
+# 📂 Repository Structure
+
+```
+.
+├── checkpoints/
+├── collection_dashboard/
+├── data/
+├── docs/
+├── inference/
+├── models/
+├── mspt/
+├── preprocessing/
+├── scripts/
+├── training/
+├── README.md
+└── requirements.txt
+```
+
+---
+
+# 🚀 Installation
+
+```bash
+git clone https://github.com/<your-username>/GloveTalk.git
+
+cd GloveTalk
+
+pip install -r requirements.txt
+```
+
+---
+
+# ▶️ Running the Project
+
+### Train MSPT Model
+
+```bash
+python scripts/mspt/run_mspt.py
+```
+
+### Live Inference
+
+```bash
+python scripts/mspt/rtmlib_live_mspt.py
+```
+
+---
+
+# 📷 Demo
+
+### Hardware Prototype
+
+<img width="1204" height="1600" alt="shaheempic" src="https://github.com/user-attachments/assets/de4c4784-5eb2-4921-9c08-3692b9d3a0d0" />
+
+
+### Live Translation
+
+*(Add GIF/video here)*
+
+### System Architecture
+
+*(Add architecture image here)*
+
+---
+
+# 🛣 Roadmap
+
+- ✅ Multi-Stream Pose Transformer
+- ✅ RTMLib Integration
+- ✅ Real-Time Sign Recognition
+- ✅ ESP32 Smart Glove
+- 🔄 Hall-Effect Sensor Evaluation
+- 🔄 TensorFlow Lite Deployment
+- 🔄 3D Printed Wearable Enclosure
+- 🔄 Sentence-Level Translation
+- 🔄 Mobile & Edge AI Deployment
+
+---
+
+# 💡 Future Improvements
+
+- Hall-effect sensor based smart glove
+- On-device TensorFlow Lite inference
+- 3D printed ergonomic enclosure
+- Multilingual speech generation
+- Facial expression & emotion recognition
+- Context-aware sentence generation
+- Edge AI deployment on embedded platforms
+
+---
+
+# 👥 Team Kaizen
+
+- **Alex Thomas**
+- **Mathew Joseph**
+- **Muhammed Shaheem**
+- **Roshan Thankachan**
+
+**Department of Electronics & Communication Engineering**  
+**Mar Athanasius College of Engineering (MACE)**
+
+---
+
+# 🏆 Competition
+
+**IEEE Signal Processing Society Kerala Chapter**  
+**Sign2Sound 2026 – Top 5 Finalist**
+
+---
+
+# 📄 License
+
+This project is released under the **MIT License**.
+
+---
+
+## ⭐ If you found this project useful, consider giving the repository a star!
