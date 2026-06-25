@@ -86,6 +86,7 @@ async def lifespan(app: FastAPI):
 
     ensure_catalog()
     ensure_label_map()
+    corpus.refresh_video_index()
 
     manifest.load()
     extract_reference_zip()

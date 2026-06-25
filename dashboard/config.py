@@ -43,19 +43,26 @@ CORPUS_VOCAB_CSV = VOCAB_CSV
 TRANSCODE_CACHE_DIR = REFERENCE_SAMPLES_DIR / "_transcoded"
 
 # RGB source videos — INCLUDE-50 tree on mounted drive (4284 .MOV files)
-_MOUNTED_INCLUDE50 = Path("/media/mathew/OS/Users/augus/INCLUDE_ML/include-50")
+INCLUDE_ML_ROOT = Path(
+    os.environ.get("INCLUDE_ML_ROOT", "/media/mathew/OS/Users/augus/INCLUDE_ML")
+)
+_MOUNTED_INCLUDE50 = INCLUDE_ML_ROOT / "include-50"
 _LOCAL_INCLUDE50 = PROJECT_ROOT / "data" / "include-50"
 
 
-def _default_include50_video_root() -> Path:
+def get_include50_video_root() -> Path:
+    """Resolve INCLUDE-50 RGB tree at call time (mount may appear after server start)."""
     if os.environ.get("INCLUDE50_VIDEO_ROOT"):
         return Path(os.environ["INCLUDE50_VIDEO_ROOT"])
     if _MOUNTED_INCLUDE50.is_dir():
         return _MOUNTED_INCLUDE50
-    return _LOCAL_INCLUDE50
+    if _LOCAL_INCLUDE50.is_dir():
+        return _LOCAL_INCLUDE50
+    return _MOUNTED_INCLUDE50
 
 
-INCLUDE50_VIDEO_ROOT = _default_include50_video_root()
+# Backward-compatible default; prefer get_include50_video_root() in runtime code.
+INCLUDE50_VIDEO_ROOT = get_include50_video_root()
 INCLUDE50_VIDEO_MANIFEST_ROOT = LAB_ROOT
 
 FPS = 25

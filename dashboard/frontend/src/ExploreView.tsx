@@ -260,8 +260,13 @@ export default function ExploreView({ glosses, summary, selected, onSelect }: Pr
                 />
               ) : (
                 <p className="muted">
-                  RGB video not available for this clip. Source videos live under{" "}
-                  <code>/media/mathew/OS/Users/augus/INCLUDE_ML/include-50</code>.
+                  RGB video not available for this clip.
+                  {summary?.video_root ? (
+                    <>
+                      {" "}
+                      Source videos are expected under <code>{summary.video_root}</code>.
+                    </>
+                  ) : null}
                 </p>
               )}
             </div>
