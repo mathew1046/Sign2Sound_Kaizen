@@ -9,12 +9,13 @@ num_derivative_features: 18
 num_features: 40
 
 words:
-  target_frames: 50
-  augment_multiplier: 4
-  batch_size: 32
+  target_frames: 100
+  raw_augment_variants: 4
+  augment_multiplier: 8
+  batch_size: 16
   epochs: 100
-  early_stopping_patience: 12
-  reduce_lr_patience: 5
+  early_stopping_patience: 15
+  reduce_lr_patience: 6
 
 alphabet:
   pseudo_sequence_length: 30
@@ -27,14 +28,17 @@ alphabet:
 
 optimizer:
   name: adam
-  learning_rate: 0.001
+  learning_rate: 0.0005
 
 model:
-  bilstm_units_1: 128
-  bilstm_units_2: 64
-  dense_units: 64
-  spatial_dropout: 0.3
-  dropout: 0.4
+  bilstm_units_1: 64
+  bilstm_units_2: 32
+  dense_units: 32
+  spatial_dropout: 0.4
+  dropout: 0.5
+  lstm_dropout: 0.2
+  recurrent_dropout: 0.2
+  l2: 0.001
 
 train_val_split: 0.2
 random_state: 42

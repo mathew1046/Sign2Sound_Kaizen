@@ -254,6 +254,16 @@ python scripts/mspt/run_mspt.py
 python scripts/mspt/rtmlib_live_mspt.py
 ```
 
+By default, live MSPT **buffers glosses** and speaks composed English after a signing pause (`--utterance-pause-sec`, default 4s). Set `GEMINI_API_KEY` in `.env` for phrase-level grammar via Gemini; without a key, rules and join fallback apply. Press `f` to force-flush the buffer. Use `--no-compose` for legacy per-gloss TTS.
+
+```bash
+# Rules-only composition (no API)
+python scripts/mspt/rtmlib_live_mspt.py --no-gemini
+
+# Legacy: speak each gloss immediately
+python scripts/mspt/rtmlib_live_mspt.py --no-compose
+```
+
 ---
 
 # 📷 Demo

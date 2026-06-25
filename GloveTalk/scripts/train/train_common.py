@@ -46,6 +46,9 @@ def train_model(
         dense_units=model_cfg["dense_units"],
         spatial_dropout=model_cfg["spatial_dropout"],
         dropout=model_cfg["dropout"],
+        lstm_dropout=model_cfg.get("lstm_dropout", 0.0),
+        recurrent_dropout=model_cfg.get("recurrent_dropout", 0.0),
+        l2_reg=model_cfg.get("l2", 0.0),
     )
 
     model.compile(
@@ -67,7 +70,7 @@ def train_model(
             patience=task_cfg["reduce_lr_patience"],
             min_lr=1e-6,
         ),
-        ModelCheckpoint(str(model_path), monitor="val_accuracy", save_best_only=True),
+        ModelCheckpoint(str(model_path), monitor="val_loss", save_best_only=True),
     ]
 
     print(f"Training {model_path.name}...")

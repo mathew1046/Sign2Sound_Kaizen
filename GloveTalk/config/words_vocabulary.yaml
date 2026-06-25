@@ -1,25 +1,14 @@
-# Canonical GloveTalk word vocabulary (22 signs only)
-num_classes: 22
+# Custom 11-sign vocabulary (includes rest baseline)
+num_classes: 11
 words:
-  - black
-  - boy
-  - cell phone
-  - fan
-  - good
+  - b
+  - big_large
+  - good morning
+  - happy
   - hello
   - house
   - i
-  - it
-  - large
-  - long
-  - loud
-  - monday
-  - my namer is shaheem
-  - new
-  - pen
-  - priest
-  - shop
+  - o
+  - rest
   - teacher
   - thank you
-  - time
-  - white

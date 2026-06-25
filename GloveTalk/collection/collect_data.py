@@ -7,40 +7,64 @@ import time
 from pathlib import Path
 
 import serial
-import serial.tools.list_ports
 
-def find_esp_port():
-    print("🔍 Scanning for hardware...")
-    ports = serial.tools.list_ports.comports()
-    
-    for port in ports:
-        # Check for common ESP32 USB-to-Serial converter names
-        if "CP210" in port.description or "CH340" in port.description or "UART" in port.description:
-            print(f"✅ Found recognized device on {port.device} ({port.description})")
-            return port.device
-            
-    # Fallback: if no specific name matches, show available ports or pick the first one
-    if ports:
-        print(f"⚠️ Specific chip not found. Defaulting to first available: {ports[0].device}")
-        return ports[0].device
-        
-    print("❌ No COM ports found! Is the receiver plugged in?")
-    return None
+BAUD_RATE = 115200
+GLOVE_SERIAL_PORT = "/dev/ttyUSB0"
+
+
+def parse_line(line):
+    try:
+        line = line.strip()
+        if not line or "|" not in line:
+            return None
+        parts = line.split('|')
+        if len(parts) < 2:
+            return None
+        l_data = parts[0].strip().split(',')[1:]   # skip 'L' label
+        r_data = parts[1].strip().split(',')[1:]   # skip 'R' label
+        values = [float(x) for x in l_data] + [float(x) for x in r_data]
+        if len(values) != 18:                      # sanity check
+            return None
+        return values
+    except Exception:
+        return None
+
+
+def open_glove_serial():
+    """Open ttyUSB0 once for the session. ttyUSB1 is charging-only."""
+    print(f"🔌 Opening glove port {GLOVE_SERIAL_PORT}...")
+    try:
+        ser = serial.Serial(GLOVE_SERIAL_PORT, BAUD_RATE, timeout=0.5)
+    except (serial.SerialException, OSError) as exc:
+        print(f"Cannot open {GLOVE_SERIAL_PORT}: {exc}")
+        return None
+    time.sleep(0.5)
+    ser.reset_input_buffer()
+    print(f"✅ Connected to {GLOVE_SERIAL_PORT} (locked for this session)")
+    return ser
 
 # --- CONFIGURATION ---
-SERIAL_PORT = find_esp_port()
-BAUD_RATE = 115200
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.vocabulary import load_words_vocabulary
-
 CSV_FILENAME = str(ROOT / "data" / "raw" / "sign_language_dataset.csv")
 CALIBRATION_FILE = str(ROOT / "sensor_calibration.json")
-TARGET_FRAMES = 50
 
-if not SERIAL_PORT:
+# --- SESSION CONFIG ---
+COLLECTION_TARGETS = [
+    "rest",
+    "big_large",
+]
+SAMPLES_PER_LABEL = 10
+FRAMES_PER_SAMPLE = 100
+FRAME_CAPTURE_TIMEOUT_SEC = 10.0
+
+CALIBRATION_FRAMES = 30
+HARDWARE_TIMEOUT_SEC = 15.0
+
+ser = open_glove_serial()
+if not ser:
     print("Exiting...")
     exit()
 
@@ -62,26 +86,56 @@ if not os.path.exists(CSV_FILENAME) or os.path.getsize(CSV_FILENAME) == 0:
 else:
     print("📂 Appending to existing dataset file.")
 
-try:
-    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
-    print(f"🔌 Connected to {SERIAL_PORT}")
-except Exception as e:
-    print(f"Error connecting: {e}")
-    exit()
+def wait_for_hardware(timeout_sec=HARDWARE_TIMEOUT_SEC):
+    """Confirm the ESP32 is streaming parseable frames before calibration."""
+    print("⏳ Waiting for glove data stream...", end="", flush=True)
+    deadline = time.time() + timeout_sec
+    last_raw = ""
+    while time.time() < deadline:
+        line = ser.readline().decode('utf-8', errors='ignore')
+        if not line:
+            print(".", end="", flush=True)
+            continue
+        last_raw = line.strip()
+        if parse_line(last_raw):
+            print(" OK")
+            return True
+    print(" FAILED")
+    print("\n⚠️ No valid glove frames received.")
+    if last_raw:
+        print(f"   Last raw line: {last_raw[:120]}")
+    print("   Check: both gloves powered on, Glove A paired to Glove B (ESP-NOW), USB cable on Glove B.")
+    return False
 
-def parse_line(line):
-    try:
-        parts = line.split('|')
-        if len(parts) < 2:
+
+def collect_calibration_frames(step_name, target_count=CALIBRATION_FRAMES, timeout_sec=HARDWARE_TIMEOUT_SEC):
+    """Collect frames with visible progress and a hard timeout."""
+    frames = []
+    bad_lines = 0
+    deadline = time.time() + timeout_sec
+    print(f"   Collecting {step_name} calibration ({target_count} frames)...")
+
+    while len(frames) < target_count:
+        if time.time() > deadline:
+            print(f"\n⚠️ Timeout: only collected {len(frames)}/{target_count} frames for {step_name}.")
+            if bad_lines:
+                print(f"   Skipped {bad_lines} unparseable line(s).")
             return None
-        l_data = parts[0].strip().split(',')[1:]   # skip 'L' label
-        r_data = parts[1].strip().split(',')[1:]   # skip 'R' label
-        values = [float(x) for x in l_data] + [float(x) for x in r_data]
-        if len(values) != 18:                      # sanity check
-            return None
-        return values
-    except:
-        return None
+
+        line = ser.readline().decode('utf-8', errors='ignore')
+        if not line:
+            continue
+
+        parsed = parse_line(line)
+        if parsed:
+            frames.append(parsed)
+            if len(frames) == 1 or len(frames) % 5 == 0 or len(frames) == target_count:
+                print(f"   ... {len(frames)}/{target_count}", flush=True)
+        else:
+            bad_lines += 1
+
+    print(f"   ✅ {step_name} calibration complete.")
+    return frames
 
 # --- CALIBRATION ---
 baseline_min = []
@@ -95,24 +149,24 @@ if os.path.exists(CALIBRATION_FILE):
         baseline_max = cal_data['baseline_max']
 else:
     print("\n--- First-Time Hardware Calibration ---")
+    if not wait_for_hardware():
+        ser.close()
+        exit(1)
+
     input("1. Hold both hands completely FLAT and open. Press ENTER...")
     ser.reset_input_buffer()
-    flat_frames = []
-    while len(flat_frames) < 30:          # more samples = more stable
-        if ser.in_waiting:
-            parsed = parse_line(ser.readline().decode('utf-8', errors='ignore').strip())
-            if parsed:
-                flat_frames.append(parsed)
+    flat_frames = collect_calibration_frames("flat/open hand")
+    if not flat_frames:
+        ser.close()
+        exit(1)
     baseline_min = [sum(col) / len(col) for col in zip(*flat_frames)]
 
     input("2. Close both hands into a TIGHT FIST. Press ENTER...")
     ser.reset_input_buffer()
-    fist_frames = []
-    while len(fist_frames) < 30:
-        if ser.in_waiting:
-            parsed = parse_line(ser.readline().decode('utf-8', errors='ignore').strip())
-            if parsed:
-                fist_frames.append(parsed)
+    fist_frames = collect_calibration_frames("closed fist")
+    if not fist_frames:
+        ser.close()
+        exit(1)
     baseline_max = [sum(col) / len(col) for col in zip(*fist_frames)]
 
     with open(CALIBRATION_FILE, 'w') as f:
@@ -149,101 +203,111 @@ def record_serial_background():
     global last_hardware_signal
     while True:
         try:
-            if ser.in_waiting:
-                line = ser.readline().decode('utf-8', errors='ignore').strip()
-                last_hardware_signal = time.time()
-                if is_recording:
-                    parsed = parse_line(line)
-                    if parsed:
-                        with frame_lock:        # lock before appending
-                            raw_frames.append(parsed)
-        except:
+            line = ser.readline().decode('utf-8', errors='ignore').strip()
+            if not line:
+                continue
+            last_hardware_signal = time.time()
+            if is_recording:
+                parsed = parse_line(line)
+                if parsed:
+                    with frame_lock:
+                        raw_frames.append((time.monotonic(), parsed))
+        except Exception:
             pass
-        time.sleep(0.001)
 
 listener_thread = threading.Thread(target=record_serial_background, daemon=True)
 listener_thread.start()
 
-# --- MAIN RECORDING LOOP ---
-WORD_VOCABULARY = load_words_vocabulary()
-print("\n--- DYNAMIC SIGN DATA COLLECTOR ---")
-print(f"Allowed vocabulary: {len(WORD_VOCABULARY)} words")
-for i, word in enumerate(WORD_VOCABULARY, 1):
+
+def record_frames(target_count=FRAMES_PER_SAMPLE, timeout_sec=FRAME_CAPTURE_TIMEOUT_SEC):
+    """Record continuously until target_count frames are captured."""
+    global is_recording
+    with frame_lock:
+        raw_frames.clear()
+    start = time.monotonic()
+    deadline = start + timeout_sec
+    is_recording = True
+    print(f"   🔴 RECORDING {target_count} frames — perform the sign now!")
+    while time.monotonic() < deadline:
+        with frame_lock:
+            if len(raw_frames) >= target_count:
+                break
+        time.sleep(0.001)
+    is_recording = False
+    with frame_lock:
+        captured = list(raw_frames[:target_count])
+    timed_frames = []
+    for frame_time, frame in captured:
+        ts = frame_time - start
+        if ts < 0:
+            ts = 0.0
+        timed_frames.append((ts, frame))
+    return timed_frames
+
+
+def save_take(label, timed_frames):
+    rows_written = 0
+    with open(CSV_FILENAME, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        for ts, frame in timed_frames:
+            normalized = normalize_frame(frame)
+            writer.writerow([round(ts, 3), label] + normalized)
+            rows_written += 1
+        file.flush()
+        os.fsync(file.fileno())
+    return rows_written
+
+
+# --- GUIDED RECORDING LOOP ---
+print("\n--- GUIDED SIGN DATA COLLECTOR ---")
+print(f"Recording: {FRAMES_PER_SAMPLE} frames per sample")
+print(f"Samples per sign: {SAMPLES_PER_LABEL}")
+print("Press ENTER after each sample to record. Type 'quit' to stop early.\n")
+for i, word in enumerate(COLLECTION_TARGETS, 1):
     print(f"  {i:2}. {word}")
 
-while True:
-    label = input("\nEnter sign label (must be one of the 22 words) or 'quit': ").strip().lower()
-    if label == 'quit':
-        break
-    if not label:
-        continue
-    if label not in WORD_VOCABULARY:
-        print(f"Invalid label. Choose one of the {len(WORD_VOCABULARY)} words listed above.")
-        continue
+session_quit = False
+for label_idx, label in enumerate(COLLECTION_TARGETS, 1):
+    print(f"\n{'=' * 60}")
+    print(f"Sign {label_idx}/{len(COLLECTION_TARGETS)}: '{label}'")
+    print(f"Collect {SAMPLES_PER_LABEL} samples ({FRAMES_PER_SAMPLE} frames each)")
+    print(f"{'=' * 60}")
 
-    take_num = 1
-
-    while True:
-        cmd = input(f"\n[Take {take_num}] Press ENTER to START '{label}' (or 'back'): ").strip().lower()
-        if cmd == 'back':
-            break
+    sample_num = 1
+    while sample_num <= SAMPLES_PER_LABEL:
+        cmd = input(
+            f"\n[{label}] Sample {sample_num}/{SAMPLES_PER_LABEL} — "
+            f"hold the sign, then press ENTER to record (or 'quit'): "
+        ).strip().lower()
         if cmd == 'quit':
-            exit()
+            session_quit = True
+            break
 
         if time.time() - last_hardware_signal > 3.0:
             print("\n⚠️ ERROR: Hardware timeout — ESP32 not sending data.")
+            session_quit = True
             break
 
-        # START
-        with frame_lock:                    # clear safely
-            raw_frames.clear()
-        is_recording = True
-        print("   🔴 RECORDING... Perform the sign!")
-
-        input("   Press ENTER to STOP...")
-        is_recording = False
-
-        # Safe copy immediately after stopping
-        with frame_lock:
-            captured = list(raw_frames)
-
+        captured = record_frames()
         total = len(captured)
-        print(f"   Captured {total} frames.")
+        print(f"   Captured {total}/{FRAMES_PER_SAMPLE} frames.")
 
-        if total == 0:
-            print("   ⚠️ No data captured. Try again.")
+        if total < FRAMES_PER_SAMPLE:
+            if total == 0:
+                print("   ⚠️ No data captured. Repeat this sample.")
+            else:
+                print(f"   ⚠️ Only got {total} frames. Repeat this sample.")
             continue
 
-        # Scale to TARGET_FRAMES
-        if total >= TARGET_FRAMES:
-            # evenly sample rather than just truncate
-            indices = [int(i * total / TARGET_FRAMES) for i in range(TARGET_FRAMES)]
-            final_frames = [captured[i] for i in indices]
-            print(f"   (Resampled {total} → {TARGET_FRAMES} frames)")
-        else:
-            final_frames = captured.copy()
-            last_frame = final_frames[-1]
-            while len(final_frames) < TARGET_FRAMES:
-                final_frames.append(last_frame)
-            print(f"   (Padded {total} → {TARGET_FRAMES} frames)")
-
-        # Normalize and save with simulated timestamps
-        time_step = 0.02 
-        rows_written = 0
         try:
-            with open(CSV_FILENAME, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                for step, frame in enumerate(final_frames):
-                    normalized = normalize_frame(frame)
-                    ts = round(step * time_step, 3)
-                    writer.writerow([ts, label] + normalized)
-                    rows_written += 1
-                file.flush()
-                os.fsync(file.fileno())
-            print(f"   ✅ Take {take_num} saved — {rows_written} rows written to disk.")
-            take_num += 1
+            rows_written = save_take(label, captured)
+            print(f"   ✅ Sample {sample_num} saved — {rows_written} rows written.")
+            sample_num += 1
         except Exception as e:
             print(f"   ❌ Save error: {e}")
+
+    if session_quit:
+        break
 
 print("\nDone. Dataset saved to:", ABSOLUTE_CSV_PATH)
 ser.close()

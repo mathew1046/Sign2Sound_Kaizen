@@ -48,9 +48,19 @@ def load_config():
         return yaml.safe_load(f)
 
 
-def add_gaussian_noise(window: np.ndarray, sigma: float = 0.02) -> np.ndarray:
+def add_gaussian_noise(window: np.ndarray, sigma: float = 0.04) -> np.ndarray:
     noisy = window + np.random.normal(0, sigma, window.shape).astype(np.float32)
     return noisy.astype(np.float32)
+
+
+def scale_amplitude(window: np.ndarray, low: float = 0.9, high: float = 1.1) -> np.ndarray:
+    scale = np.random.uniform(low, high)
+    return (window * scale).astype(np.float32)
+
+
+def feature_dropout(window: np.ndarray, drop_rate: float = 0.08) -> np.ndarray:
+    mask = (np.random.random(window.shape) > drop_rate).astype(np.float32)
+    return (window * mask).astype(np.float32)
 
 
 def time_shift(window: np.ndarray, max_shift: int = 3) -> np.ndarray:
@@ -76,12 +86,21 @@ def time_scale_window(window: np.ndarray, min_len: int = 24, max_len: int = 36) 
 
 def augment_window(window: np.ndarray, apply_time_ops: bool = True) -> np.ndarray:
     aug = add_gaussian_noise(window)
+    if np.random.rand() < 0.6:
+        aug = scale_amplitude(aug)
+    if np.random.rand() < 0.4:
+        aug = feature_dropout(aug)
     if apply_time_ops:
-        if np.random.rand() < 0.5:
+        if np.random.rand() < 0.6:
             aug = time_shift(aug)
         if np.random.rand() < 0.5:
             aug = time_scale_window(aug)
     return aug.astype(np.float32)
+
+
+def augment_raw_take(raw: np.ndarray, flex_sigma: float = 0.03) -> np.ndarray:
+    """Jitter each frame in a take before feature extraction."""
+    return np.stack([jitter_raw_frame(frame, flex_sigma=flex_sigma) for frame in raw]).astype(np.float32)
 
 
 def jitter_raw_frame(frame: np.ndarray, flex_sigma: float = 0.02) -> np.ndarray:
@@ -149,6 +168,14 @@ def apply_augmentation(X_list, y_list, multiplier: int, apply_time_ops: bool):
     return aug_X, aug_y
 
 
+def windows_from_take(raw: np.ndarray, label: str, window_size: int, stride: int, dt: float):
+    features = raw_sequence_to_features(raw, dt=dt)
+    windows = sliding_windows(features, window_size, stride)
+    if not windows:
+        return [], []
+    return list(windows), [label] * len(windows)
+
+
 def prepare_words_dataset(cfg: dict) -> None:
     df = pd.read_csv(WORDS_CLEAN_CSV)
     window_size = cfg["window_size"]
@@ -156,19 +183,15 @@ def prepare_words_dataset(cfg: dict) -> None:
     target_frames = cfg["words"]["target_frames"]
     dt = cfg["dt"]
     augment_mult = cfg["words"]["augment_multiplier"]
+    raw_aug_variants = cfg["words"].get("raw_augment_variants", 3)
 
-    take_windows = []
+    take_chunks = []
     take_labels = []
     num_takes = len(df) // target_frames
     for take_idx in range(num_takes):
         chunk = df.iloc[take_idx * target_frames : (take_idx + 1) * target_frames]
-        label = chunk["label"].iloc[0]
-        raw = chunk[RAW_COLUMNS].values.astype(np.float32)
-        features = raw_sequence_to_features(raw, dt=dt)
-        windows = sliding_windows(features, window_size, stride)
-        if windows:
-            take_windows.append(windows)
-            take_labels.append(label)
+        take_chunks.append(chunk[RAW_COLUMNS].values.astype(np.float32))
+        take_labels.append(chunk["label"].iloc[0])
 
     take_indices = np.arange(len(take_labels))
     train_takes, val_takes = train_test_split(
@@ -181,13 +204,20 @@ def prepare_words_dataset(cfg: dict) -> None:
     X_train_list, y_train_list = [], []
     X_val_list, y_val_list = [], []
     for idx in train_takes:
-        for window in take_windows[idx]:
-            X_train_list.append(window)
-            y_train_list.append(take_labels[idx])
+        raw = take_chunks[idx]
+        label = take_labels[idx]
+        windows, labels = windows_from_take(raw, label, window_size, stride, dt)
+        X_train_list.extend(windows)
+        y_train_list.extend(labels)
+        for _ in range(raw_aug_variants):
+            aug_raw = augment_raw_take(raw)
+            windows, labels = windows_from_take(aug_raw, label, window_size, stride, dt)
+            X_train_list.extend(windows)
+            y_train_list.extend(labels)
     for idx in val_takes:
-        for window in take_windows[idx]:
-            X_val_list.append(window)
-            y_val_list.append(take_labels[idx])
+        windows, labels = windows_from_take(take_chunks[idx], take_labels[idx], window_size, stride, dt)
+        X_val_list.extend(windows)
+        y_val_list.extend(labels)
 
     print(f"  Words base windows: train={len(X_train_list)}, val={len(X_val_list)} (split by take)")
     X_train_list, y_train_list = balance_samples(X_train_list, y_train_list)
@@ -212,7 +242,7 @@ def prepare_words_dataset(cfg: dict) -> None:
     joblib.dump(scaler, WORDS_SCALER)
     np.save(PREPROCESSED / "words_classes.npy", np.array(vocabulary))
     save_feature_config(FEATURE_CONFIG, window_size, dt)
-    print(f"  Words train: {X_train.shape}, val: {X_val.shape}, classes: {len(vocabulary)} (fixed 22-word vocabulary)")
+    print(f"  Words train: {X_train.shape}, val: {X_val.shape}, classes: {len(vocabulary)}")
 
 
 def prepare_alphabet_dataset(cfg: dict) -> None:

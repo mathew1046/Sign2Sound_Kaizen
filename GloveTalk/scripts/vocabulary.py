@@ -1,4 +1,4 @@
-"""Canonical 22-word vocabulary for the GloveTalk words model."""
+"""Canonical word vocabulary for the GloveTalk words model."""
 from pathlib import Path
 
 import yaml
@@ -6,15 +6,15 @@ import yaml
 from paths import CONFIG
 
 VOCABULARY_PATH = CONFIG / "words_vocabulary.yaml"
-NUM_WORDS = 22
 
 
 def load_words_vocabulary(path: Path = VOCABULARY_PATH) -> list[str]:
     with open(path) as f:
         data = yaml.safe_load(f)
     words = data["words"]
-    if len(words) != NUM_WORDS:
-        raise ValueError(f"Expected {NUM_WORDS} words in vocabulary, got {len(words)}")
+    expected = data.get("num_classes", len(words))
+    if len(words) != expected:
+        raise ValueError(f"Expected {expected} words in vocabulary, got {len(words)}")
     return words
 
 

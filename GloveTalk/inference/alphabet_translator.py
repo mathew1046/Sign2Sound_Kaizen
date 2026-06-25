@@ -6,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import pyttsx3
 import serial
-import serial.tools.list_ports
 import tensorflow as tf
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,21 +17,8 @@ from paths import ALPHABET_CLASSES, ALPHABET_MODEL, ALPHABET_SCALER
 WINDOW_SIZE = 30
 NUM_RAW_FEATURES = 18
 IMU_INDICES = {0, 1, 2, 3, 9, 10, 11, 12}
-
-
-def find_esp_port():
-    ports = serial.tools.list_ports.comports()
-    for port in ports:
-        if "CP210" in port.description or "CH340" in port.description or "UART" in port.description:
-            return port.device
-    return ports[0].device if ports else None
-
-
-SERIAL_PORT = find_esp_port()
-if not SERIAL_PORT:
-    raise SystemExit("No serial port found.")
-
 BAUD_RATE = 115200
+GLOVE_SERIAL_PORT = "/dev/ttyUSB0"
 CALIBRATION_FILE = ROOT / "sensor_calibration.json"
 
 CONFIDENCE_THRESHOLD = 0.85
@@ -59,8 +45,14 @@ classes = np.load(ALPHABET_CLASSES, allow_pickle=True)
 scaler = load_scaler(ALPHABET_SCALER)
 feature_buffer = GloveFeatureBuffer(window_size=WINDOW_SIZE)
 
-ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
-print(f"Connected on {SERIAL_PORT}")
+print(f"Opening glove port {GLOVE_SERIAL_PORT}...")
+try:
+    ser = serial.Serial(GLOVE_SERIAL_PORT, BAUD_RATE, timeout=0.1)
+except (serial.SerialException, OSError) as exc:
+    print(f"Cannot open {GLOVE_SERIAL_PORT}: {exc}")
+    raise SystemExit(1)
+
+print(f"Connected on {GLOVE_SERIAL_PORT} (locked for this session)")
 print("=== SYSTEM ONLINE: SPELL ALPHABETS NATURALLY ===")
 ser.reset_input_buffer()
 

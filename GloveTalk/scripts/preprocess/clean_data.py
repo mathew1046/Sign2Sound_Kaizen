@@ -20,7 +20,7 @@ RAW_COLUMNS = [
 
 ALPHABET_COLUMNS = ["label"] + RAW_COLUMNS
 WORDS_COLUMNS = ["timestamp", "label"] + RAW_COLUMNS
-TARGET_FRAMES = 50
+TARGET_FRAMES = 100
 
 
 def _is_valid_quaternion_row(row) -> bool:
@@ -73,8 +73,12 @@ def clean_words() -> pd.DataFrame:
 
     with open(WORDS_RAW_CSV, newline="") as f:
         reader = csv.reader(f)
-        next(reader)
-        for row in reader:
+        first_row = next(reader)
+        if first_row and first_row[0].strip().lower() != "timestamp":
+            rows_iter = [first_row, *reader]
+        else:
+            rows_iter = reader
+        for row in rows_iter:
             if len(row) == expected_cols:
                 valid_rows.append(row)
                 previous_valid = row
@@ -101,10 +105,13 @@ def clean_words() -> pd.DataFrame:
         df = df[df["label"].isin(vocabulary)]
         print(f"  Dropped {dropped} frames with labels outside the 22-word vocabulary: {unknown}")
 
-    if len(set(df["label"].unique())) != 22:
-        present = sorted(df["label"].unique())
+    present = sorted(df["label"].unique())
+    if set(present) != vocabulary:
+        missing = sorted(vocabulary - set(present))
+        extra = sorted(set(present) - vocabulary)
         raise ValueError(
-            f"Words dataset must contain exactly 22 labels; found {len(present)}: {present}"
+            f"Words dataset labels must match vocabulary ({len(vocabulary)} classes). "
+            f"Missing: {missing}. Extra: {extra}. Present: {present}"
         )
 
     PREPROCESSED.mkdir(parents=True, exist_ok=True)

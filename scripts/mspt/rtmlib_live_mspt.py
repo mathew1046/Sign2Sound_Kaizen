@@ -3,7 +3,11 @@
 
 Smooth preview (async frame grab + pose worker), large prediction overlay,
 rtmlib COCO-WholeBody skeleton panel bottom-left. Clip-based inference like
-``run_mspt_webcam_finetuned.py``. Speaks the top prediction via pyttsx3 (``--no-tts`` to disable).
+``run_mspt_webcam_finetuned.py``. Speaks predictions via pyttsx3 (``--no-tts`` to disable).
+
+With ``--compose`` (default), glosses are buffered and flushed into natural English
+after a signing pause (``--utterance-pause-sec``). Uses Gemini when ``GEMINI_API_KEY``
+is set; otherwise rules + join fallback. Press ``f`` to force-flush the buffer.
 
 Usage:
   cd ~/Arrakis/Sign2Sound_Kaizen
@@ -12,6 +16,9 @@ Usage:
     --video-url http://localhost:8080/video \\
     --checkpoint checkpoints/mspt/mspt_rtmlib_263_best.pt \\
     --lab-root data/include50_rtmlib_1080
+
+  # Per-gloss TTS (legacy):
+  python scripts/mspt/rtmlib_live_mspt.py --no-compose --video-url http://localhost:8080/video
 """
 
 from __future__ import annotations
@@ -49,6 +56,7 @@ from mspt.rtmlib_preprocess import (  # noqa: E402
     RIGHT_HAND_SLICE,
     RtmlibWholebodyExtractor,
 )
+from mspt.gloss_compose import GlossComposer, ensure_project_env, env_status, gemini_available  # noqa: E402
 from mspt.skeleton_viz import composite_bottom_left, render_skeleton_panel  # noqa: E402
 
 DEFAULT_VIDEO_URL = "http://localhost:8080/video"
@@ -61,8 +69,24 @@ DEFAULT_DISPLAY_FPS = 0
 DEFAULT_SKELETON_PANEL = 420
 DEFAULT_POSE_MAX_WIDTH = 720
 DEFAULT_MIN_CONFIDENCE = 0.12
-DEFAULT_HOLD_PRED_SEC = 2.0
+DEFAULT_HOLD_PRED_SEC = 5.0
 DEFAULT_MOTION_THRESHOLD = 0.008
+DEFAULT_UTTERANCE_PAUSE_SEC = 4.0
+DEFAULT_MAX_GLOSS_BUFFER = 8
+DEFAULT_FLUSH_KEY = "f"
+
+
+def _load_dotenv() -> None:
+    path = ensure_project_env()
+    status = env_status()
+    if path is not None:
+        print(f"[live] loaded env from {path}")
+    else:
+        print(f"[live] no .env at {status['env_path']} (using process environment only)")
+    if status["gemini_key_set"]:
+        print(f"[live] GEMINI_API_KEY detected (prefix {status['gemini_key_prefix']})")
+    else:
+        print("[live] GEMINI_API_KEY not set — rules + join fallback for composition")
 
 
 def _display_gloss(label: str) -> str:
@@ -108,6 +132,12 @@ class TtsSpeaker:
         print(f"[tts] {text}")
         self._queue.put(text)
 
+    def speak_text(self, text: str) -> None:
+        if not self._available or not text:
+            return
+        print(f"[tts] {text}")
+        self._queue.put(text)
+
     def close(self) -> None:
         self._queue.put(None)
         self._thread.join(timeout=5.0)
@@ -118,6 +148,20 @@ def _speak_prediction(tts: TtsSpeaker | None, preds: list[tuple[str, float]]) ->
         return
     label, _conf = preds[0]
     tts.speak_gloss(label)
+
+
+def _on_clip_prediction(
+    tts: TtsSpeaker | None,
+    composer: GlossComposer | None,
+    preds: list[tuple[str, float]],
+    now: float,
+) -> None:
+    if not preds or preds[0][0] == "uncertain":
+        return
+    if composer is not None:
+        composer.add_gloss(preds[0][0], preds[0][1], now)
+    else:
+        _speak_prediction(tts, preds)
 
 
 def resize_for_pose(frame: np.ndarray, max_width: int) -> np.ndarray:
@@ -445,12 +489,47 @@ def draw_predictions_large(
         )
 
 
+def draw_composer_status(
+    frame: np.ndarray,
+    composer: GlossComposer | None,
+) -> None:
+    if composer is None:
+        return
+    h, w = frame.shape[:2]
+    pad = 16
+    y = int(h * 0.22)
+    font = 0.75
+    thickness = 2
+    if composer.pending_display:
+        line = f"Building: {composer.pending_display}"
+        cv2.putText(
+            frame, line, (pad, y),
+            cv2.FONT_HERSHEY_SIMPLEX, font, (255, 220, 100), thickness, cv2.LINE_AA,
+        )
+        y += 32
+    if composer.state == "composing":
+        cv2.putText(
+            frame, "Composing…", (pad, y),
+            cv2.FONT_HERSHEY_SIMPLEX, font, (180, 180, 255), thickness, cv2.LINE_AA,
+        )
+        y += 32
+    if composer.last_spoken:
+        line = f"Spoke: {composer.last_spoken}"
+        if len(line) > 72:
+            line = line[:69] + "..."
+        cv2.putText(
+            frame, line, (pad, y),
+            cv2.FONT_HERSHEY_SIMPLEX, font, (120, 255, 180), thickness, cv2.LINE_AA,
+        )
+
+
 def draw_status_bar(
     frame: np.ndarray,
     phase: str,
     elapsed: float,
     clip_sec: float,
     gap_sec: float,
+    hold_pred_sec: float,
     n_frames: int,
     motion_frames: int,
     moving: bool,
@@ -472,7 +551,7 @@ def draw_status_bar(
         )
     elif phase == "hold":
         color = (0, 255, 120)
-        msg = f"PREDICTION {elapsed:.1f}/{gap_sec:.1f}s hold"
+        msg = f"PREDICTION {elapsed:.1f}/{hold_pred_sec:.1f}s"
     else:
         color = (0, 255, 255)
         msg = f"READY — next clip in {max(0.0, gap_sec - elapsed):.1f}s"
@@ -485,6 +564,7 @@ def draw_status_bar(
 
 
 def run_live(args: argparse.Namespace) -> None:
+    _load_dotenv()
     device = args.device
     if device == "cuda" and not torch.cuda.is_available():
         device = "cpu"
@@ -509,6 +589,31 @@ def run_live(args: argparse.Namespace) -> None:
     else:
         print("[live] TTS disabled")
 
+    use_gemini = not args.no_gemini and gemini_available()
+    composer: GlossComposer | None = None
+    if args.compose:
+        def _on_composed(result) -> None:
+            print(f"[compose] {result.source}: {result.speak}")
+            if tts is not None and not args.no_tts and result.speak:
+                tts.speak_text(result.speak)
+
+        composer = GlossComposer(
+            utterance_pause_sec=args.utterance_pause_sec,
+            max_buffer=args.max_gloss_buffer,
+            use_gemini=use_gemini,
+            on_composed=_on_composed,
+            speak_enabled=not args.no_tts,
+        )
+        gemini_status = "enabled" if use_gemini else "disabled (rules + join fallback)"
+        print(
+            f"[live] gloss composer enabled "
+            f"(pause={args.utterance_pause_sec}s, max={args.max_gloss_buffer}, gemini={gemini_status})"
+        )
+    else:
+        print("[live] gloss composer disabled (--no-compose); per-gloss TTS")
+
+    flush_key = ord(args.flush_key) if args.flush_key else ord("f")
+
     extractor = RtmlibWholebodyExtractor(device=args.rtmlib_device, det_interval=args.det_interval)
     worker = PoseWorker(extractor, args.pose_max_width, unmirror_pose=args.unmirror_pose)
     print(f"[live] rtmlib device: {extractor.device} | model: yolox-x + rtmw-x")
@@ -521,6 +626,8 @@ def run_live(args: argparse.Namespace) -> None:
 
     wb_buf: list[np.ndarray] = []
     last_preds: list[tuple[str, float]] = []
+    display_preds: list[tuple[str, float]] = []
+    pred_visible_until = 0.0
     prev_kp: list[np.ndarray] = []
     last_motion = 0.0
     motion_frames = 0
@@ -599,7 +706,10 @@ def run_live(args: argparse.Namespace) -> None:
                                 model, wb_buf, args.max_seq_len, device, idx_to_label, args.top_k,
                                 min_confidence=args.min_confidence,
                             )
-                            _speak_prediction(tts, last_preds)
+                            if last_preds:
+                                display_preds = last_preds
+                                pred_visible_until = now + args.hold_pred_sec
+                            _on_clip_prediction(tts, composer, last_preds, now)
                             hold_start = now
                             phase = "hold"
                         else:
@@ -618,7 +728,10 @@ def run_live(args: argparse.Namespace) -> None:
                             model, wb_buf, args.max_seq_len, device, idx_to_label, args.top_k,
                             min_confidence=args.min_confidence,
                         )
-                        _speak_prediction(tts, last_preds)
+                        if last_preds:
+                            display_preds = last_preds
+                            pred_visible_until = now + args.hold_pred_sec
+                        _on_clip_prediction(tts, composer, last_preds, now)
                         hold_start = now
                         phase = "hold"
                     else:
@@ -631,7 +744,6 @@ def run_live(args: argparse.Namespace) -> None:
 
             if phase == "hold":
                 if (now - hold_start) >= args.hold_pred_sec:
-                    last_preds = []
                     gap_start = now
                     phase = "gap"
 
@@ -641,9 +753,11 @@ def run_live(args: argparse.Namespace) -> None:
                     _end_clip(wb_buf, worker)
                     prev_kp.clear()
                     motion_frames = 0
-                    last_preds = []
                     phase = "recording"
                     clip_start = now
+
+            if composer is not None:
+                composer.tick(now)
 
             display = frame.copy()
             if phase == "recording":
@@ -653,13 +767,19 @@ def run_live(args: argparse.Namespace) -> None:
             else:
                 elapsed_ui = now - gap_start
             draw_status_bar(
-                display, phase, elapsed_ui, args.clip_sec, args.gap_sec, len(wb_buf),
+                display, phase, elapsed_ui, args.clip_sec, args.gap_sec, args.hold_pred_sec,
+                len(wb_buf),
                 motion_frames, last_motion >= args.motion_threshold,
                 pose_fps_ema, measured_display_fps, extractor.device,
             )
+            preds_visible = bool(display_preds) and now < pred_visible_until
             draw_predictions_large(
-                display, last_preds, args.top_k, recording=(phase == "recording"),
+                display,
+                display_preds if preds_visible else [],
+                args.top_k,
+                recording=(phase == "recording" and not preds_visible),
             )
+            draw_composer_status(display, composer)
             if cached_skel is not None:
                 composite_bottom_left(display, cached_skel, margin=args.skeleton_margin)
             cv2.imshow(args.window, display)
@@ -670,14 +790,19 @@ def run_live(args: argparse.Namespace) -> None:
                 display_frames = 0
                 display_t0 = now
 
-            if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
+            key = cv2.waitKey(1) & 0xFF
+            if key in (ord("q"), 27):
                 break
+            if composer is not None and key == flush_key:
+                composer.flush()
     except KeyboardInterrupt:
         print("\n[live] stopped")
     except URLError as exc:
         print(f"[live] cannot open stream: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
     finally:
+        if composer is not None:
+            composer.close()
         if tts is not None:
             tts.close()
         grabber.stop()
@@ -704,7 +829,7 @@ def main() -> int:
     ap.add_argument("--gap-sec", type=float, default=DEFAULT_GAP_SEC,
                     help="Pause after prediction before next clip")
     ap.add_argument("--hold-pred-sec", type=float, default=DEFAULT_HOLD_PRED_SEC,
-                    help="How long to show prediction before clearing")
+                    help="Seconds to keep prediction overlay visible after each clip (default 5)")
     ap.add_argument("--fps", type=int, default=DEFAULT_FPS,
                     help="Pose extract rate (match stream; dashboard webcam is 10)")
     ap.add_argument("--display-fps", type=int, default=DEFAULT_DISPLAY_FPS, help="0 = uncapped (smoothest)")
@@ -728,6 +853,34 @@ def main() -> int:
     ap.add_argument("--no-tts", action="store_true", help="Disable spoken output for predictions")
     ap.add_argument("--tts-rate", type=int, default=150, help="pyttsx3 speech rate")
     ap.add_argument("--tts-volume", type=float, default=1.0, help="pyttsx3 volume (0.0–1.0)")
+    ap.add_argument(
+        "--compose",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Buffer glosses and speak composed English phrases (default: on)",
+    )
+    ap.add_argument(
+        "--utterance-pause-sec",
+        type=float,
+        default=DEFAULT_UTTERANCE_PAUSE_SEC,
+        help="Idle seconds after last gloss before composing and speaking",
+    )
+    ap.add_argument(
+        "--max-gloss-buffer",
+        type=int,
+        default=DEFAULT_MAX_GLOSS_BUFFER,
+        help="Force compose when buffer reaches this many glosses",
+    )
+    ap.add_argument(
+        "--no-gemini",
+        action="store_true",
+        help="Force rules-only composition even if GEMINI_API_KEY is set",
+    )
+    ap.add_argument(
+        "--flush-key",
+        default=DEFAULT_FLUSH_KEY,
+        help="Key to force-flush the gloss buffer (default: f)",
+    )
     run_live(ap.parse_args())
     return 0
 

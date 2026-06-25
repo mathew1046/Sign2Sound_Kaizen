@@ -6,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import pyttsx3
 import serial
-import serial.tools.list_ports
 import tensorflow as tf
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,30 +17,33 @@ from paths import FEATURE_CONFIG, WORDS_CLASSES, WORDS_MODEL, WORDS_SCALER
 WINDOW_SIZE = 30
 NUM_RAW_FEATURES = 18
 IMU_INDICES = {0, 1, 2, 3, 9, 10, 11, 12}
-
-
-def find_esp_port():
-    print("Scanning for hardware...")
-    ports = serial.tools.list_ports.comports()
-    for port in ports:
-        if "CP210" in port.description or "CH340" in port.description or "UART" in port.description:
-            print(f"Found device on {port.device}")
-            return port.device
-    if ports:
-        return ports[0].device
-    return None
-
-
-SERIAL_PORT = find_esp_port()
-if not SERIAL_PORT:
-    print("No serial port found.")
-    raise SystemExit(1)
-
 BAUD_RATE = 115200
+GLOVE_SERIAL_PORT = "/dev/ttyUSB0"
+
+
+def parse_line(line):
+    try:
+        line = line.strip()
+        if not line or "|" not in line:
+            return None
+        parts = line.split("|")
+        if len(parts) < 2:
+            return None
+        l_data = parts[0].strip().split(",")[1:]
+        r_data = parts[1].strip().split(",")[1:]
+        values = [float(x) for x in l_data] + [float(x) for x in r_data]
+        if len(values) != NUM_RAW_FEATURES:
+            return None
+        return values
+    except Exception:
+        return None
+
+
 CALIBRATION_FILE = ROOT / "sensor_calibration.json"
 
-CONFIDENCE_THRESHOLD = 0.90
+CONFIDENCE_THRESHOLD = 0.75
 REQUIRED_CONSECUTIVE_MATCHES = 3
+BUFFER_CLEAR_INTERVAL_SEC = 3.0
 
 tts_engine = pyttsx3.init()
 tts_engine.setProperty("rate", 150)
@@ -65,23 +67,35 @@ classes = np.load(WORDS_CLASSES, allow_pickle=True)
 scaler = load_scaler(WORDS_SCALER)
 feature_buffer = GloveFeatureBuffer(window_size=WINDOW_SIZE)
 
-ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
-print(f"Connected on {SERIAL_PORT}")
-print("=== SYSTEM ONLINE: SHOW GESTURES NATURALLY ===")
+print(f"Opening glove port {GLOVE_SERIAL_PORT}...")
+try:
+    ser = serial.Serial(GLOVE_SERIAL_PORT, BAUD_RATE, timeout=0.5)
+except (serial.SerialException, OSError) as exc:
+    print(f"Cannot open {GLOVE_SERIAL_PORT}: {exc}")
+    raise SystemExit(1)
+
+time.sleep(0.3)
 ser.reset_input_buffer()
+print(f"Connected on {GLOVE_SERIAL_PORT} (locked for this session)")
+print(f"Classes ({len(classes)}): {', '.join(classes)}")
+print("=== SYSTEM ONLINE: SHOW GESTURES NATURALLY ===")
 
 consecutive_predictions = []
-loop_counter = 0
+last_status = time.time()
+last_buffer_clear = time.time()
 
-
-def parse_line(line):
-    try:
-        parts = line.split("|")
-        l_data = parts[0].split(",")[1:]
-        r_data = parts[1].split(",")[1:]
-        return [float(x) for x in l_data] + [float(x) for x in r_data]
-    except Exception:
-        return None
+print("Waiting for glove data...", flush=True)
+stream_deadline = time.time() + 10.0
+while time.time() < stream_deadline:
+    line = ser.readline().decode("utf-8", errors="ignore")
+    if parse_line(line):
+        print("Glove stream OK — start signing.\n", flush=True)
+        ser.reset_input_buffer()
+        break
+else:
+    print("ERROR: No glove data received. Check both gloves are on and USB is connected.")
+    ser.close()
+    raise SystemExit(1)
 
 
 def normalize_frame(raw_data):
@@ -98,34 +112,55 @@ def normalize_frame(raw_data):
 
 while True:
     try:
-        if ser.in_waiting:
-            line = ser.readline().decode("utf-8", errors="ignore").strip()
-            parsed = parse_line(line)
-            if parsed and len(parsed) == NUM_RAW_FEATURES:
-                feature_buffer.add_frame(normalize_frame(parsed))
-                loop_counter += 1
+        line = ser.readline().decode("utf-8", errors="ignore")
+        if not line:
+            time.sleep(0.001)
+            continue
 
-                if feature_buffer.is_ready() and loop_counter % 8 == 0:
-                    input_matrix = feature_buffer.get_feature_window(scaler)
-                    predictions = model.predict(input_matrix, verbose=0)[0]
-                    max_prob = float(np.max(predictions))
-                    predicted_label = classes[np.argmax(predictions)]
-                    print(f"Live Prediction: {predicted_label} ({max_prob * 100:.1f}%)", end="\r")
+        parsed = parse_line(line)
+        if not parsed:
+            continue
 
-                    if max_prob > CONFIDENCE_THRESHOLD:
-                        consecutive_predictions.append(predicted_label)
-                    else:
-                        consecutive_predictions.clear()
+        now = time.time()
+        if now - last_buffer_clear >= BUFFER_CLEAR_INTERVAL_SEC:
+            feature_buffer.clear()
+            consecutive_predictions.clear()
+            last_buffer_clear = now
 
-                    if len(consecutive_predictions) >= REQUIRED_CONSECUTIVE_MATCHES:
-                        if len(set(consecutive_predictions)) == 1:
-                            speak(predicted_label)
-                            consecutive_predictions.clear()
-                            feature_buffer.clear()
-                            time.sleep(1.5)
-                            ser.reset_input_buffer()
-                        else:
-                            consecutive_predictions.pop(0)
+        feature_buffer.add_frame(normalize_frame(parsed))
+
+        if not feature_buffer.is_ready():
+            if time.time() - last_status > 1.0:
+                print(f"Buffering... {len(feature_buffer._raw_buffer)}/{WINDOW_SIZE} frames", flush=True)
+                last_status = time.time()
+            continue
+
+        input_matrix = feature_buffer.get_feature_window(scaler)
+        predictions = model.predict(input_matrix, verbose=0)[0]
+        max_prob = float(np.max(predictions))
+        predicted_label = classes[np.argmax(predictions)]
+        print(f"Live: {predicted_label} ({max_prob * 100:.1f}%)", flush=True)
+
+        if max_prob > CONFIDENCE_THRESHOLD:
+            consecutive_predictions.append(predicted_label)
+        else:
+            consecutive_predictions.clear()
+
+        if len(consecutive_predictions) >= REQUIRED_CONSECUTIVE_MATCHES:
+            if len(set(consecutive_predictions)) == 1:
+                speak(predicted_label)
+                consecutive_predictions.clear()
+                feature_buffer.clear()
+                last_buffer_clear = time.time()
+                time.sleep(1.0)
+                ser.reset_input_buffer()
+            else:
+                consecutive_predictions.pop(0)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+        break
     except Exception as e:
-        print(f"\nGlitch bypassed: {e}")
+        print(f"\nGlitch bypassed: {e}", flush=True)
         ser.reset_input_buffer()
+
+ser.close()
