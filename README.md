@@ -270,10 +270,16 @@ Runs all three models in parallel with confirm-only glove fusion and optional fi
 
 ```bash
 export PYTHONPATH=$PWD:$PWD/scripts/mspt
+
+# Glove on 8080; video forwarded to host 8090
+adb forward tcp:8090 tcp:8080
 python scripts/fusion/live_hybrid.py \
-  --video-url http://localhost:8080/video \
+  --video-url http://localhost:8090/video \
   --checkpoint checkpoints/mspt/mspt_rtmlib_263_best.pt
 ```
+
+- **Glove** listens on TCP port **8080** (glove firmware connects to your PC IP:8080).
+- **Video** uses host port **8090**: `adb forward tcp:8090 tcp:8080` → `http://localhost:8090/video`.
 
 - **MSPT** is the primary word recognizer; glosses feed `GlossComposer` for natural English TTS.
 - **Glove** (11 classes) confirms overlapping signs only; use `--glove-fallback` to allow glove-only words when MSPT is silent.
@@ -282,10 +288,10 @@ python scripts/fusion/live_hybrid.py \
 
 ```bash
 # Without glove hardware
-python scripts/fusion/live_hybrid.py --no-glove --video-url http://localhost:8080/video
+python scripts/fusion/live_hybrid.py --no-glove --video-url http://localhost:8090/video
 
 # Allow glove-only fallback for overlap vocabulary
-python scripts/fusion/live_hybrid.py --glove-fallback --glove-port /dev/ttyUSB0
+python scripts/fusion/live_hybrid.py --glove-fallback
 ```
 
 ---
