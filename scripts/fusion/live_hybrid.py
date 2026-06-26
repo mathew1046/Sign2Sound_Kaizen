@@ -68,8 +68,10 @@ def _apply_decision(
     elif decision.action == "append_letter":
         print(f"[fusion] spell +{decision.gloss} → {decision.meta.get('spell_buffer', '')}")
     elif decision.action == "flush_spell" and decision.gloss:
-        print(f"[fusion] speak spell: {decision.gloss}")
-        if tts is not None:
+        print(f"[fusion] spell complete: {decision.gloss}")
+        if composer is not None:
+            composer.add_gloss(decision.gloss.lower(), 1.0, now)
+        elif tts is not None:
             tts.speak_text(decision.gloss)
 
 
@@ -326,6 +328,8 @@ def run_live(args: argparse.Namespace) -> None:
     measured_display_fps = 0.0
     flush_key = ord(args.flush_key) if args.flush_key else ord("f")
 
+    window_fullscreen_set = False
+
     try:
         while True:
             now = time.monotonic()
@@ -347,12 +351,12 @@ def run_live(args: argparse.Namespace) -> None:
 
             if alphabet is not None:
                 alphabet.submit_frame(frame)
-                alphabet.set_enabled(policy.is_alphabet_mode)
+                alphabet.set_enabled(policy.is_alphabet_mode or policy.alphabet_weight > 0.0)
 
             if glove is not None:
                 for token in glove.poll():
                     decision = policy.on_glove(token)
-                    _apply_decision(decision, composer=composer, tts=tts, now=time.time())
+                    _apply_decision(decision, composer=composer, tts=tts, now=now)
 
             if alphabet is not None:
                 for token in alphabet.poll():
@@ -396,7 +400,7 @@ def run_live(args: argparse.Namespace) -> None:
 
                 events = segmenter.update(wb, last_motion, now)
                 for ev in events:
-                    if ev.kind == "end" and ev.buffer and policy.is_word_mode:
+                    if ev.kind == "end" and ev.buffer:
                         last_preds = mspt_live.predict_clip(
                             model, ev.buffer, args.max_seq_len, device, idx_to_label, args.top_k,
                             min_confidence=args.min_confidence,
@@ -406,8 +410,8 @@ def run_live(args: argparse.Namespace) -> None:
                             pred_visible_until = now + 1.5
                         if last_preds and last_preds[0][0] != "uncertain":
                             gloss, conf = last_preds[0]
-                            decision = policy.on_mspt(gloss, conf, time.time())
-                            _apply_decision(decision, composer=composer, tts=tts, now=time.time())
+                            decision = policy.on_mspt(gloss, conf, now)
+                            _apply_decision(decision, composer=composer, tts=tts, now=now)
                         if isinstance(segmenter, FixedSegmenter):
                             phase_elapsed_start = now
                         mspt_live._end_clip([], worker)
@@ -456,7 +460,13 @@ def run_live(args: argparse.Namespace) -> None:
                 draw_hand_crop_bbox(display, alphabet.get_crop_bbox())
             if cached_skel is not None:
                 mspt_live.composite_bottom_left(display, cached_skel, margin=args.skeleton_margin)
+            if args.window_scale != 1.0 and args.window_scale > 0:
+                display = cv2.resize(display, None, fx=args.window_scale, fy=args.window_scale,
+                                     interpolation=cv2.INTER_LINEAR)
             cv2.imshow(args.window, display)
+            if args.fullscreen and not window_fullscreen_set:
+                cv2.setWindowProperty(args.window, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                window_fullscreen_set = True
 
             display_frames += 1
             if now - display_t0 >= 1.0:
@@ -474,7 +484,7 @@ def run_live(args: argparse.Namespace) -> None:
                 print(f"[hybrid] mode → {label}")
             if key == ord(" "):
                 decision = policy.flush_spell_buffer()
-                _apply_decision(decision, composer=composer, tts=tts, now=time.time())
+                _apply_decision(decision, composer=composer, tts=tts, now=now)
     except KeyboardInterrupt:
         print("\n[hybrid] stopped")
     finally:
@@ -515,6 +525,9 @@ def main() -> int:
     ap.add_argument("--min-confidence", type=float, default=mspt_live.DEFAULT_MIN_CONFIDENCE)
     ap.add_argument("--top-k", type=int, default=3)
     ap.add_argument("--window", default="Sign2Sound Hybrid")
+    ap.add_argument("--fullscreen", action="store_true", help="Display window in fullscreen mode")
+    ap.add_argument("--window-scale", type=float, default=1.0,
+                    help="Scale the display frame (e.g. 1.5, 2.0) without changing capture resolution")
     ap.add_argument("--unmirror-pose", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--skeleton-panel-size", type=int, default=mspt_live.DEFAULT_SKELETON_PANEL)
     ap.add_argument("--skeleton-margin", type=int, default=20)

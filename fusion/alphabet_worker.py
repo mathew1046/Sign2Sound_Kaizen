@@ -88,6 +88,9 @@ class AlphabetWorker:
         self._available = False
         self._error: str | None = None
         self._external_bbox = None
+        self._frame_version: int = 0
+        self._clear_buffers_flag: bool = False
+        self._last_processed_version: int = 0
 
     @property
     def available(self) -> bool:
@@ -103,6 +106,7 @@ class AlphabetWorker:
             if not enabled:
                 self._crop_bbox = None
                 self._external_bbox = None
+                self._clear_buffers_flag = True
 
     def get_crop_bbox(self) -> tuple[int, int, int, int] | None:
         with self._state_lock:
@@ -111,6 +115,7 @@ class AlphabetWorker:
     def submit_frame(self, frame: np.ndarray) -> None:
         with self._frame_lock:
             self._latest_frame = frame.copy()
+            self._frame_version += 1
 
     def submit_hand_bbox(self, bbox: tuple[int, int, int, int] | None) -> None:
         with self._state_lock:
@@ -141,6 +146,16 @@ class AlphabetWorker:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+
+    def health(self) -> dict:
+        """Return worker health status."""
+        return {
+            "available": self._available,
+            "error": self._error,
+            "enabled": self._enabled,
+            "queue_depth": self._queue.qsize(),
+            "frame_version": self._frame_version,
+        }
 
     def _run(self) -> None:
         try:
@@ -173,16 +188,36 @@ class AlphabetWorker:
                     enabled = self._enabled
 
                 frame = None
+                current_version = 0
                 with self._frame_lock:
                     if self._latest_frame is not None:
                         frame = self._latest_frame.copy()
+                        current_version = self._frame_version
                 if frame is None:
                     time.sleep(0.01)
                     continue
 
+                # Skip if we already processed this exact frame version
+                if current_version == self._last_processed_version:
+                    time.sleep(0.005)
+                    continue
+                self._last_processed_version = current_version
+
                 if not enabled:
+                    with self._state_lock:
+                        if self._clear_buffers_flag:
+                            self._clear_buffers_flag = False
+                    frame_queue.clear()
+                    last_pred_time = 0.0
                     time.sleep(0.01)
                     continue
+
+                # Check for clear-buffers signal even when enabled (mode switch)
+                with self._state_lock:
+                    if self._clear_buffers_flag:
+                        self._clear_buffers_flag = False
+                        frame_queue.clear()
+                        last_pred_time = 0.0
 
                 # Check for externally provided bbox first (e.g. from RTMLib)
                 with self._state_lock:
@@ -225,7 +260,7 @@ class AlphabetWorker:
 
                 frame_queue.append(result.landmarks)
 
-                now = time.time()
+                now = time.monotonic()
                 if len(frame_queue) == 30 and (now - last_pred_time) >= self.min_interval_sec:
                     data = np.array(frame_queue).reshape(30, 126)
                     mean = data.mean()

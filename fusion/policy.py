@@ -48,6 +48,11 @@ class FusionPolicy:
     # --- Spell auto-flush ---
     spell_idle_timeout_sec: float = 2.0
 
+    # --- Letter debounce ---
+    letter_refractory_sec: float = 0.5
+    last_letter: str = ""
+    last_letter_time: float = 0.0
+
     # --- Calibration ---
     mspt_calibration: CalibrationParams = field(default_factory=lambda: MSPT_CALIBRATION)
     alphabet_calibration: CalibrationParams = field(default_factory=lambda: ALPHABET_CALIBRATION)
@@ -194,6 +199,8 @@ class FusionPolicy:
         glove_label, glove_conf = self._recent_glove_label(now)
         if glove_label is not None and glove_label != gloss and glove_conf > 0.3:
             cal_mspt = disagreement_penalty(cal_mspt)
+            if cal_mspt < self.mspt_calibration.calibrate(self.min_mspt_confidence):
+                return FusionDecision("ignore", reason="mspt_glove_disagreement")
 
         self.last_mspt_time = now
         self.last_mspt_gloss = gloss
@@ -271,9 +278,16 @@ class FusionPolicy:
         if not letter or len(letter) != 1:
             return FusionDecision("ignore", reason="alphabet_invalid")
 
+        # Debounce: suppress same letter repeated within refractory window
+        upper_letter = letter.upper()
+        if upper_letter == self.last_letter and (now - self.last_letter_time) < self.letter_refractory_sec:
+            return FusionDecision("ignore", reason="alphabet_duplicate_letter")
+
         cal = self.alphabet_calibration.calibrate(confidence)
         self.last_spell_activity = now
         self.spell_buffer += letter.upper()
+        self.last_letter = upper_letter
+        self.last_letter_time = now
         return FusionDecision(
             "append_letter",
             gloss=letter.upper(),
@@ -287,6 +301,8 @@ class FusionPolicy:
             return FusionDecision("ignore", reason="spell_buffer_empty")
         word = self.spell_buffer
         self.spell_buffer = ""
+        self.last_letter = ""
+        self.last_letter_time = 0.0
         return FusionDecision("flush_spell", gloss=word, reason="spell_flushed")
 
     def check_spell_timeout(self, now: float) -> FusionDecision:

@@ -83,6 +83,14 @@ class GloveWorker:
         if self._thread is not None:
             self._thread.join(timeout=2.0)
 
+    def health(self) -> dict:
+        """Return worker health status."""
+        return {
+            "available": self._available,
+            "error": self._error,
+            "queue_depth": self._queue.qsize(),
+        }
+
     def _run(self) -> None:
         ser = None
         try:
@@ -152,7 +160,7 @@ class GloveWorker:
                 if not parsed:
                     continue
 
-                now = time.time()
+                now = time.monotonic()
                 if now - last_buffer_clear >= BUFFER_CLEAR_INTERVAL_SEC:
                     feature_buffer.clear()
                     consecutive.clear()

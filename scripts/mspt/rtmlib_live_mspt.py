@@ -343,14 +343,28 @@ def wholebody_to_viz(wb: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray
 
 
 def open_video_capture(video_url: str) -> tuple[cv2.VideoCapture | str, str]:
-    cap = cv2.VideoCapture(video_url, cv2.CAP_FFMPEG)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    if cap.isOpened():
-        ok, frame = cap.read()
-        if ok and frame is not None:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            return cap, "cv2"
-        cap.release()
+    is_camera = video_url and (video_url.isdigit() or video_url.startswith("/dev/video"))
+    # Camera index: try default backend first (FFMPEG can't capture webcams on Linux)
+    if is_camera:
+        cap = cv2.VideoCapture(int(video_url))
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            ok, frame = cap.read()
+            if ok and frame is not None:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                return cap, "cv2"
+        print(f"[live] camera {video_url} failed with default backend")
+        return video_url, "mjpeg"
+    # URL: try FFMPEG first, fall back to default backend
+    for backend in (cv2.CAP_FFMPEG, cv2.CAP_ANY):
+        cap = cv2.VideoCapture(video_url, backend)
+        if cap.isOpened():
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            ok, frame = cap.read()
+            if ok and frame is not None:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                return cap, "cv2"
+            cap.release()
     return video_url, "mjpeg"
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -17,8 +18,7 @@ class ModeDetectorConfig:
     hand_body_ratio_min: float = 2.5
     min_visible_hand_joints: int = 8
     switch_frames: int = 6
-    hand_motion_ema: float = 0.0
-    body_motion_ema: float = 0.0
+    vote_window_size: int = 30
     ema_alpha: float = 0.25
 
 
@@ -30,21 +30,19 @@ class ModeDetector:
     mode: SigningMode = "word"
     _prev_hands: np.ndarray | None = None
     _prev_body: np.ndarray | None = None
-    _alphabet_votes: int = 0
-    _word_votes: int = 0
+    _vote_window: deque = field(init=False)
+    _hand_motion_ema: float = 0.0
+    _body_motion_ema: float = 0.0
+
+    def __post_init__(self) -> None:
+        self._vote_window = deque(maxlen=self.config.vote_window_size)
 
     @property
     def alphabet_weight(self) -> float:
-        """Continuous 0.0–1.0 weight toward alphabet mode.
-
-        Based on the ratio of alphabet votes in the recent window.
-        Used by FusionPolicy for soft mode transitions so high-confidence
-        predictions from the "off" mode can still break through.
-        """
-        total = self._alphabet_votes + self._word_votes
-        if total == 0:
+        """Continuous 0.0–1.0 weight toward alphabet mode based on rolling vote window."""
+        if not self._vote_window:
             return 0.0 if self.mode == "word" else 1.0
-        return self._alphabet_votes / total
+        return sum(1 for v in self._vote_window if v == "alphabet") / len(self._vote_window)
 
     def _joint_motion(self, cur: np.ndarray, prev: np.ndarray | None) -> float:
         if prev is None or cur.shape != prev.shape:
@@ -69,40 +67,32 @@ class ModeDetector:
         self._prev_body = body.copy()
 
         alpha = self.config.ema_alpha
-        self.config.hand_motion_ema = (1 - alpha) * self.config.hand_motion_ema + alpha * hand_m
-        self.config.body_motion_ema = (1 - alpha) * self.config.body_motion_ema + alpha * body_m
+        self._hand_motion_ema = (1 - alpha) * self._hand_motion_ema + alpha * hand_m
+        self._body_motion_ema = (1 - alpha) * self._body_motion_ema + alpha * body_m
 
-        hand_e = self.config.hand_motion_ema
-        body_e = self.config.body_motion_ema
+        hand_e = self._hand_motion_ema
+        body_e = self._body_motion_ema
         hands_ok = self._hands_visible(hands)
 
-        vote: SigningMode = self.mode
-        if not hands_ok:
-            vote = "word"
-        elif body_e >= self.config.body_word_min:
-            vote = "word"
-        elif hand_e < self.config.hand_motion_min * 0.5:
-            # Low/resting hand motion returns to word mode
-            vote = "word"
-        elif (
-            hands_ok
-            and body_e <= self.config.body_spell_max
-            and hand_e >= self.config.hand_motion_min
-            and hand_e / (body_e + 1e-6) >= self.config.hand_body_ratio_min
-        ):
+        # Alphabet only when entire skeleton is static.
+        # Any hand or body movement → word mode (MSPT).
+        vote: SigningMode = "word"
+        if hands_ok and hand_e < self.config.hand_motion_min and body_e < self.config.body_word_min:
             vote = "alphabet"
+        elif not hands_ok:
+            vote = "word"
 
-        if vote == "alphabet":
-            self._alphabet_votes += 1
-            self._word_votes = 0
-        elif vote == "word":
-            self._word_votes += 1
-            self._alphabet_votes = 0
+        self._vote_window.append(vote)
 
-        if self._alphabet_votes >= self.config.switch_frames:
-            self.mode = "alphabet"
-        elif self._word_votes >= self.config.switch_frames:
-            self.mode = "word"
+        # Count consecutive same votes from the end of the window
+        consecutive = 0
+        for v in reversed(self._vote_window):
+            if v == vote:
+                consecutive += 1
+            else:
+                break
+        if consecutive >= self.config.switch_frames:
+            self.mode = vote
 
         return self.mode
 
@@ -111,8 +101,8 @@ class ModeDetector:
         return {
             "mode": self.mode,
             "alphabet_weight": self.alphabet_weight,
-            "hand_motion_ema": self.config.hand_motion_ema,
-            "body_motion_ema": self.config.body_motion_ema,
-            "alphabet_votes": self._alphabet_votes,
-            "word_votes": self._word_votes,
+            "hand_motion_ema": self._hand_motion_ema,
+            "body_motion_ema": self._body_motion_ema,
+            "alphabet_votes": sum(1 for v in self._vote_window if v == "alphabet"),
+            "word_votes": sum(1 for v in self._vote_window if v == "word"),
         }
