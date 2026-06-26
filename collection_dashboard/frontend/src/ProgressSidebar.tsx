@@ -54,7 +54,7 @@ export default function ProgressSidebar({
                 className={`word-btn ${active ? "active" : ""} ${done ? "done" : ""}`}
                 onClick={() => onSelect(g)}
               >
-                <span className="word-name">{g.display_name}</span>
+                <span className="word-name">{g.display_name}{g.display_name_ml ? <span className="ml-name"> {g.display_name_ml}</span> : ""}</span>
                 {explore ? (
                   <span className="word-count">{g.clip_count} clips</span>
                 ) : (

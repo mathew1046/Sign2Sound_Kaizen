@@ -222,16 +222,21 @@ class FusionPolicy:
         if self.vocab.should_reject(label):
             return FusionDecision("ignore", reason="glove_rest")
 
-        margin = float(token.meta.get("margin", 0.0))
-        flex_std = float(token.meta.get("flex_std", 0.0))
-        consecutive = int(token.meta.get("consecutive", 0))
+        # Remote feed tokens (from live_translator.py) have stable_label
+        # already validated remotely — skip hardware-specific anti-FP checks.
+        if "remote_timestamp" in token.meta:
+            pass
+        else:
+            margin = float(token.meta.get("margin", 0.0))
+            flex_std = float(token.meta.get("flex_std", 0.0))
+            consecutive = int(token.meta.get("consecutive", 0))
 
-        if margin < self.glove_margin_threshold:
-            return FusionDecision("ignore", reason="glove_low_margin")
-        if flex_std < self.glove_activity_threshold:
-            return FusionDecision("ignore", reason="glove_low_activity")
-        if consecutive < self.glove_consecutive:
-            return FusionDecision("ignore", reason="glove_not_stable")
+            if margin < self.glove_margin_threshold:
+                return FusionDecision("ignore", reason="glove_low_margin")
+            if flex_std < self.glove_activity_threshold:
+                return FusionDecision("ignore", reason="glove_low_activity")
+            if consecutive < self.glove_consecutive:
+                return FusionDecision("ignore", reason="glove_not_stable")
 
         if self.is_alphabet_mode and self.vocab.is_glove_letter(label):
             return FusionDecision("ignore", reason="glove_letter_in_spell_mode")

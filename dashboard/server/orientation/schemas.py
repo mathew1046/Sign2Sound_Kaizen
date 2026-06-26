@@ -39,6 +39,7 @@ class OrientationProgress(BaseModel):
 class OrientationReferenceMeta(BaseModel):
     sign_id: str
     display_name: str
+    display_name_ml: str | None = None
     sign_type: Literal["static", "dynamic"]
     active_hand: Literal["left", "right"]
     critical_features: list[str]
@@ -51,6 +52,7 @@ class AnalyzeResponse(BaseModel):
     feedback_text: str
     progress: OrientationProgress
     display_name: str
+    display_name_ml: str | None = None
 
 
 class FeatureVectorDict(BaseModel):

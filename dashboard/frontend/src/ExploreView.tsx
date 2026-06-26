@@ -145,14 +145,14 @@ export default function ExploreView({ glosses, summary, selected, onSelect }: Pr
               {analysis.best_classes[0] && (
                 <p>
                   <strong>Best class:</strong>{" "}
-                  {analysis.best_classes[0].display_name} (
+                  {analysis.best_classes[0].display_name}{analysis.best_classes[0].display_name_ml ? <span className="ml-name"> {analysis.best_classes[0].display_name_ml}</span> : ""} (
                   {(analysis.best_classes[0].accuracy * 100).toFixed(1)}%)
                 </p>
               )}
               {analysis.worst_classes[0] && (
                 <p>
                   <strong>Worst class:</strong>{" "}
-                  {analysis.worst_classes[0].display_name} (
+                  {analysis.worst_classes[0].display_name}{analysis.worst_classes[0].display_name_ml ? <span className="ml-name"> {analysis.worst_classes[0].display_name_ml}</span> : ""} (
                   {(analysis.worst_classes[0].accuracy * 100).toFixed(1)}%)
                 </p>
               )}
@@ -168,7 +168,7 @@ export default function ExploreView({ glosses, summary, selected, onSelect }: Pr
                         if (g) onSelect(g);
                       }}
                     >
-                      {c.display_name}
+                      {c.display_name}{c.display_name_ml ? <span className="ml-name"> {c.display_name_ml}</span> : ""}
                     </button>
                     <span className="muted">
                       {" "}
@@ -192,7 +192,7 @@ export default function ExploreView({ glosses, summary, selected, onSelect }: Pr
                         if (g) onSelect(g);
                       }}
                     >
-                      {c.word.replace(/_/g, " ")}
+                      {c.word.replace(/_/g, " ")}{c.display_name_ml ? <span className="ml-name"> {c.display_name_ml}</span> : ""}
                     </button>
                     <span className="muted"> — {c.reason}</span>
                   </li>
@@ -226,7 +226,7 @@ export default function ExploreView({ glosses, summary, selected, onSelect }: Pr
           >
             {glosses.map((g) => (
               <option key={g.word} value={g.word}>
-                {g.display_name}
+                {g.display_name}{g.display_name_ml ? ` (${g.display_name_ml})` : ""}
                 {!g.in_include50 ? " (INCLUDE-263)" : ""}
               </option>
             ))}

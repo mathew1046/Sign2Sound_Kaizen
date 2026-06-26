@@ -6,6 +6,8 @@ import csv
 import os
 from pathlib import Path
 
+from dashboard.ml_utils import ml_display_name
+
 DASHBOARD_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = DASHBOARD_ROOT.parent
 
@@ -78,6 +80,7 @@ DEFAULT_GEMMA_MODEL = "gemma-4-26b-a4b-it"
 
 ORIENTATION_REFS_DIR = DASHBOARD_ROOT / "orientation_refs"
 ORIENTATION_PROGRESS_PATH = DASHBOARD_ROOT / "orientation_progress.json"
+CONSENT_PATH = DASHBOARD_ROOT / "consent_record.json"
 ORIENTATION_FEEDBACK_CACHE_DIR = DASHBOARD_ROOT / "cache" / "orientation_feedback"
 
 # Collection / server
@@ -142,6 +145,7 @@ def load_vocabulary() -> list[dict]:
                     "label_id": int(row["label_id"]),
                     "word": word,
                     "display_name": word.replace("_", " ").title(),
+                    "display_name_ml": ml_display_name(word),
                 }
             )
     rows.sort(key=lambda r: r["label_id"])
@@ -168,6 +172,7 @@ def load_corpus_vocabulary() -> list[dict]:
                     "label_id": label_id,
                     "word": word,
                     "display_name": word.replace("_", " ").title(),
+                    "display_name_ml": ml_display_name(word),
                     "in_include50": in50,
                 }
             )

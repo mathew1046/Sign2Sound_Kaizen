@@ -75,7 +75,7 @@ export default function ReviewView({ glosses, selected, onSelect, onRefresh }: P
           >
             {glosses.map((g) => (
               <option key={g.word} value={g.word}>
-                {g.display_name} ({g.completed_count}/10)
+                {g.display_name}{g.display_name_ml ? <span className="ml-name"> {g.display_name_ml}</span> : ""} ({g.completed_count}/10)
               </option>
             ))}
           </select>

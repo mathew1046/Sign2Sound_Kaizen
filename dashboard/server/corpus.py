@@ -13,14 +13,19 @@ import cv2
 import numpy as np
 
 from dashboard.config import (
+    CORPUS_VOCAB_CSV,
     EVALS_DIR,
+    FPS,
     INCLUDE50_LAB_ROOT,
     INCLUDE50_VIDEO_MANIFEST_ROOT,
-    get_include50_video_root,
+    INCLUDE50_VIDEO_ROOT,
+    LAB_ROOT,
     PROJECT_ROOT,
     TRANSCODE_CACHE_DIR,
+    get_include50_video_root,
     load_corpus_vocabulary,
 )
+from dashboard.ml_utils import ml_display_name
 
 MSPT_SCRIPTS = PROJECT_ROOT / "scripts" / "mspt"
 if str(MSPT_SCRIPTS) not in sys.path:
@@ -328,6 +333,7 @@ class Include50Corpus:
                     "label_id": label_ids.get(word, v.get("label_id", -1)),
                     "word": word,
                     "display_name": v.get("display_name", word.replace("_", " ").title()),
+                    "display_name_ml": ml_display_name(word),
                     "clip_count": counts[word],
                     "in_include50": v.get("in_include50", label_ids.get(word, 999) < 50),
                 }
@@ -483,13 +489,23 @@ class Include50Corpus:
             raise RuntimeError("Failed to encode skeleton PNG")
         return buf.tobytes()
 
+    def _add_ml_names(self, d: dict) -> dict:
+        for key in ("best_classes", "worst_classes"):
+            for entry in d.get(key) or []:
+                if "display_name_ml" not in entry:
+                    entry["display_name_ml"] = ml_display_name(entry.get("word", ""))
+        for entry in d.get("check_skeleton_classes") or []:
+            if "display_name_ml" not in entry:
+                entry["display_name_ml"] = ml_display_name(entry.get("word", ""))
+        return d
+
     def eval_analysis(self) -> dict | None:
         path = EVALS_DIR / "eval_analysis.json"
         if not path.is_file():
             return None
         import json
 
-        return json.loads(path.read_text(encoding="utf-8"))
+        return self._add_ml_names(json.loads(path.read_text(encoding="utf-8")))
 
     def confusion_matrix_png(self) -> Path | None:
         for name in ("confusion_matrix_all.png", "confusion_matrix_test.png"):

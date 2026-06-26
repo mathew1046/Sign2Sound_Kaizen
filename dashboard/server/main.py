@@ -7,6 +7,7 @@ import io
 import json
 import threading
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cv2
@@ -24,6 +25,7 @@ from dashboard.config import (
     CATALOG_PATH,
     COLLECTION_OUTPUT_DIR,
     COMPOSE_CACHE_DIR,
+    CONSENT_PATH,
     COOLDOWN_SEC,
     FPS,
     FRAME_SIZE,
@@ -193,12 +195,15 @@ def api_vocab():
     }
 
 
+from dashboard.ml_utils import ml_display_name
+
 @app.get("/api/signs/{gloss}")
 def api_sign_detail(gloss: str):
     catalog = load_catalog()
     entry = get_gloss_entry(catalog, gloss)
     if not entry:
         raise HTTPException(404, f"Unknown gloss: {gloss}")
+    entry["display_name_ml"] = ml_display_name(gloss)
     return entry
 
 
@@ -363,6 +368,7 @@ async def api_orientation_analyze(
     user_features, _ = sequence_from_wholebody(wholebody, fps=fps, active_hand=ref_hand)
     comparison = compare_sequences(gloss, user_features, reference, fps=fps)
     display_name = entry.get("display_name", gloss.replace("_", " ").title())
+    display_name_ml = ml_display_name(gloss)
     feedback_text = feedback_with_gemma(display_name, comparison, use_api=use_gemma)
     progress = orientation_progress.log_attempt(
         gloss,
@@ -376,6 +382,7 @@ async def api_orientation_analyze(
         feedback_text=feedback_text,
         progress=progress,
         display_name=display_name,
+        display_name_ml=display_name_ml,
     ).model_dump()
 
 
@@ -513,6 +520,49 @@ def reset_data():
     return {"ok": True, "message": "All collected data has been reset"}
 
 
+# ---------------------------------------------------------------------------
+# Data collection consent
+# ---------------------------------------------------------------------------
+
+
+class ConsentRecord(BaseModel):
+    agreed: bool = True
+    consent_version: int = 1
+
+
+@app.post("/api/consent")
+def record_consent(body: ConsentRecord):
+    """Record the user's data collection consent."""
+    if not body.agreed:
+        if CONSENT_PATH.exists():
+            CONSENT_PATH.unlink()
+        return {"ok": True, "consented": False}
+    record = {
+        "consented": True,
+        "consent_version": body.consent_version,
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "rgb_not_public": True,
+        "skeleton_may_be_public": True,
+    }
+    CONSENT_PATH.write_text(json.dumps(record, indent=2), encoding="utf-8")
+    return {"ok": True, "consented": True}
+
+
+@app.get("/api/consent")
+def consent_status():
+    if CONSENT_PATH.exists():
+        record = json.loads(CONSENT_PATH.read_text(encoding="utf-8"))
+        return {"ok": True, "consented": record.get("consented", False), "record": record}
+    return {"ok": True, "consented": False, "record": None}
+
+
+@app.delete("/api/consent")
+def withdraw_consent():
+    if CONSENT_PATH.exists():
+        CONSENT_PATH.unlink()
+    return {"ok": True, "consented": False}
+
+
 @app.get("/api/stream/live.mjpg")
 def live_stream():
     if not webcam.enabled:
@@ -556,6 +606,7 @@ def get_word_timing(word: str):
     return {
         "word": word,
         "display_name": entry.get("display_name", word.replace("_", " ")),
+        "display_name_ml": ml_display_name(word),
         **timing,
         "default_cooldown_sec": COOLDOWN_SEC,
         "default_ref_countdown_sec": REF_PLAY_COUNTDOWN_SEC,
@@ -580,6 +631,7 @@ def patch_word_timing(word: str, body: WordTimingUpdate):
         "ok": True,
         "word": word,
         "display_name": entry.get("display_name", word.replace("_", " ")),
+        "display_name_ml": ml_display_name(word),
         **timing,
     }
 
@@ -661,6 +713,7 @@ def collected_word(word: str):
         "word": word,
         "label_id": entry["label_id"],
         "display_name": entry.get("display_name", word.replace("_", " ")),
+        "display_name_ml": ml_display_name(word),
         "completed_count": entry.get("completed_count", 0),
         "slots": slots,
         "references": ref_urls,
@@ -728,6 +781,7 @@ def overview():
         {
             "word": word,
             "display_name": entry.get("display_name", word),
+            "display_name_ml": ml_display_name(word),
             "completed_count": entry.get("completed_count", 0),
             "remaining": SAMPLES_PER_WORD - entry.get("completed_count", 0),
         }

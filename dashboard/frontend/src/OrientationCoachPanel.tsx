@@ -257,7 +257,7 @@ export default function OrientationCoachPanel({
       >
         <div className="sign-label">
           <span className="eyebrow">Reference sign</span>
-          <h2>{selected?.display_name ?? "Choose a sign"}</h2>
+          <h2>{selected?.display_name ?? "Choose a sign"} {selected?.display_name_ml && <span className="ml-name">{selected.display_name_ml}</span>}</h2>
           {selected && (
             <p className="slug">Gloss: {selected.gloss.replace(/_/g, " ")}</p>
           )}
@@ -417,7 +417,7 @@ export default function OrientationCoachPanel({
                 disabled={!g.has_sign || busy}
                 onClick={() => onSelect(g)}
               >
-                <span>{g.display_name}</span>
+                <span>{g.display_name}{g.display_name_ml && <span className="ml-name"> {g.display_name_ml}</span>}</span>
                 {g.has_sign && <span className="badge">{g.variant_count} clips</span>}
               </button>
             ))}

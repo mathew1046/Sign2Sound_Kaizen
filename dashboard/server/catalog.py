@@ -17,6 +17,7 @@ from dashboard.config import (
     ensure_combined_manifest,
 )
 from dashboard.label_utils import ensure_label_map
+from dashboard.ml_utils import ml_display_name
 
 
 def ensure_catalog() -> Path:
@@ -57,6 +58,7 @@ def vocab_list(catalog: dict) -> list[dict]:
         {
             "gloss": g["gloss"],
             "display_name": g["display_name"],
+            "display_name_ml": ml_display_name(g["gloss"]),
             "label_id": g["label_id"],
             "variant_count": g["variant_count"],
             "default_exemplar_id": g.get("default_exemplar_id"),

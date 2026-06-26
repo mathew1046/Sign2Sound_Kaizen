@@ -7,6 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dashboard.config import ORIENTATION_REFS_DIR, PROJECT_ROOT
+from dashboard.ml_utils import ml_display_name
 from dashboard.server.orientation.schemas import OrientationReferenceMeta
 
 
@@ -53,6 +54,7 @@ def reference_meta(gloss: str, display_name: str | None = None) -> OrientationRe
     return OrientationReferenceMeta(
         sign_id=ref["sign_id"],
         display_name=display_name or ref.get("display_name", gloss.replace("_", " ").title()),
+        display_name_ml=ml_display_name(gloss),
         sign_type=ref.get("sign_type", "dynamic"),
         active_hand=ref.get("active_hand", "right"),
         critical_features=ref.get("critical_features", []),

@@ -130,48 +130,64 @@ def draw_hand_crop_bbox(
     )
 
 
-def get_hand_bbox_from_rtmlib(hands: np.ndarray, frame_w: int, frame_h: int, pad_frac: float = 0.15) -> tuple[int, int, int, int] | None:
-    # hands shape is (42, 2). Left hand is hands[:21], Right hand is hands[21:]
-    lh = hands[:21]
-    rh = hands[21:]
-    
-    lh_valid = lh[np.any(lh != 0, axis=1)]
-    rh_valid = rh[np.any(rh != 0, axis=1)]
-    
-    pts = []
-    if len(lh_valid) >= 5:
-        pts.append(lh_valid)
-    if len(rh_valid) >= 5:
-        pts.append(rh_valid)
-        
-    if not pts:
+def _hand_bbox(keypoints: np.ndarray, frame_w: int, frame_h: int, pad_frac: float = 0.15) -> tuple[int, int, int, int] | None:
+    """Compute padded bbox for a single hand's keypoints (N, 2) in [0,1] coords."""
+    valid = keypoints[np.any(keypoints != 0, axis=1)]
+    if len(valid) < 5:
         return None
-        
-    valid_pts = np.concatenate(pts, axis=0)
-    
-    x_coords = valid_pts[:, 0] * frame_w
-    y_coords = valid_pts[:, 1] * frame_h
-    
-    x_min = int(np.min(x_coords))
-    y_min = int(np.min(y_coords))
-    x_max = int(np.max(x_coords))
-    y_max = int(np.max(y_coords))
-    
-    w = x_max - x_min
-    h = y_max - y_min
-    
+    xs = valid[:, 0] * frame_w
+    ys = valid[:, 1] * frame_h
+    x_min, x_max = int(np.min(xs)), int(np.max(xs))
+    y_min, y_max = int(np.min(ys)), int(np.max(ys))
+    w, h = x_max - x_min, y_max - y_min
     if w < 12 or h < 12:
         return None
-        
     pad_w = int(w * pad_frac)
     pad_h = int(h * pad_frac)
-    
     x0 = max(0, x_min - pad_w)
     y0 = max(0, y_min - pad_h)
     x1 = min(frame_w, x_max + pad_w)
     y1 = min(frame_h, y_max + pad_h)
-    
     return (x0, y0, x1 - x0, y1 - y0)
+
+
+def get_hand_bboxes_from_rtmlib(hands: np.ndarray, frame_w: int, frame_h: int, pad_frac: float = 0.15) -> list:
+    """Return a list of individual hand bboxes from RTMLib keypoints.
+    
+    When hands are close together, returns a single union bbox.
+    When hands are far apart (single-hand sign), returns separate bboxes.
+    """
+    lh = hands[:21]
+    rh = hands[21:]
+    
+    lh_bbox = _hand_bbox(lh, frame_w, frame_h, pad_frac)
+    rh_bbox = _hand_bbox(rh, frame_w, frame_h, pad_frac)
+    
+    if lh_bbox is None and rh_bbox is None:
+        return []
+    if lh_bbox is None:
+        return [rh_bbox]
+    if rh_bbox is None:
+        return [lh_bbox]
+    
+    # Both hands present: check if they're far apart (single-hand sign)
+    def _center(b):
+        return (b[0] + b[2] // 2, b[1] + b[3] // 2)
+    
+    lx, ly = _center(lh_bbox)
+    rx, ry = _center(rh_bbox)
+    dist = ((lx - rx) ** 2 + (ly - ry) ** 2) ** 0.5
+    max_hand_size = max(lh_bbox[2], lh_bbox[3], rh_bbox[2], rh_bbox[3])
+    
+    if dist > max_hand_size * 3.0:
+        return [lh_bbox, rh_bbox]
+    
+    # Close together → single union bbox
+    x0 = min(lh_bbox[0], rh_bbox[0])
+    y0 = min(lh_bbox[1], rh_bbox[1])
+    x1 = max(lh_bbox[0] + lh_bbox[2], rh_bbox[0] + rh_bbox[2])
+    y1 = max(lh_bbox[1] + lh_bbox[3], rh_bbox[1] + rh_bbox[3])
+    return [(x0, y0, x1 - x0, y1 - y0)]
 
 
 def run_live(args: argparse.Namespace) -> None:
@@ -218,9 +234,6 @@ def run_live(args: argparse.Namespace) -> None:
         vocab=FusionVocabulary(),
         min_mspt_confidence=args.min_confidence,
         alphabet_threshold=args.alphabet_confidence,
-        glove_margin_threshold=args.glove_margin,
-        glove_activity_threshold=args.glove_activity,
-        glove_consecutive=args.glove_consecutive,
         glove_fallback=args.glove_fallback,
         glove_fallback_silent_sec=args.glove_fallback_silent_sec,
         manual_mode="alphabet" if args.spell_mode else None,
@@ -241,18 +254,16 @@ def run_live(args: argparse.Namespace) -> None:
         from fusion.glove_worker import GloveWorker  # noqa: WPS433
 
         glove = GloveWorker(
-            tcp_port=args.glove_tcp_port,
-            margin_threshold=args.glove_margin,
-            activity_threshold=args.glove_activity,
-            consecutive_required=args.glove_consecutive,
+            host=args.glove_host,
+            feed_port=args.glove_feed_port,
             connect_timeout_sec=args.glove_connect_timeout,
         )
         if not glove.start():
-            print(f"[hybrid] glove unavailable ({glove.error}); continuing without glove")
+            print(f"[hybrid] glove feed unavailable ({glove.error}); continuing without glove")
             glove.close()
             glove = None
         else:
-            print(f"[hybrid] glove enabled on TCP port {args.glove_tcp_port} (confirm-only)")
+            print(f"[hybrid] glove enabled: feed {args.glove_host}:{args.glove_feed_port}")
 
     alphabet: AlphabetWorker | None = None
     if not args.no_alphabet:
@@ -380,9 +391,9 @@ def run_live(args: argparse.Namespace) -> None:
                 
                 # Get hand bbox from active RTMLib keypoints and submit it to alphabet worker
                 h_h, h_w = frame.shape[:2]
-                hand_bbox = get_hand_bbox_from_rtmlib(hands, h_w, h_h, pad_frac=args.crop_pad)
+                hand_bboxes = get_hand_bboxes_from_rtmlib(hands, h_w, h_h, pad_frac=args.crop_pad)
                 if alphabet is not None:
-                    alphabet.submit_hand_bbox(hand_bbox)
+                    alphabet.submit_hand_bboxes(hand_bboxes)
                 last_hands, last_body, last_face = hands, body, face
                 detected_mode = mode_detector.update(hands, body)
                 if policy.manual_mode is None:
@@ -541,15 +552,14 @@ def main() -> int:
     ap.add_argument("--flush-key", default=mspt_live.DEFAULT_FLUSH_KEY)
 
     ap.add_argument("--no-glove", action="store_true")
-    ap.add_argument("--glove-tcp-port", type=int, default=8080,
-                    help="TCP port for glove Wi-Fi stream (default 8080)")
+    ap.add_argument("--glove-host", type=str, default="10.43.206.118",
+                    help="GloveTalk prediction feed host (default 10.43.206.118)")
+    ap.add_argument("--glove-feed-port", type=int, default=8081,
+                    help="TCP port for GloveTalk prediction feed (default 8081)")
     ap.add_argument("--glove-connect-timeout", type=float, default=15.0)
     ap.add_argument("--glove-fallback", action="store_true",
                     help="Allow glove-only overlap words when MSPT silent")
     ap.add_argument("--glove-fallback-silent-sec", type=float, default=3.0)
-    ap.add_argument("--glove-margin", type=float, default=0.25)
-    ap.add_argument("--glove-activity", type=float, default=0.02)
-    ap.add_argument("--glove-consecutive", type=int, default=5)
 
     ap.add_argument("--no-alphabet", action="store_true")
     ap.add_argument("--alphabet-weights", type=str,

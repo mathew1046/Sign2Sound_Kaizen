@@ -87,7 +87,7 @@ class AlphabetWorker:
         self._thread: threading.Thread | None = None
         self._available = False
         self._error: str | None = None
-        self._external_bbox = None
+        self._external_bboxes: list[tuple[int, int, int, int]] = []
         self._frame_version: int = 0
         self._clear_buffers_flag: bool = False
         self._last_processed_version: int = 0
@@ -105,21 +105,21 @@ class AlphabetWorker:
             self._enabled = enabled
             if not enabled:
                 self._crop_bbox = None
-                self._external_bbox = None
+                self._external_bboxes.clear()
                 self._clear_buffers_flag = True
 
     def get_crop_bbox(self) -> tuple[int, int, int, int] | None:
         with self._state_lock:
-            return self._crop_bbox
+            return self._external_bboxes[0] if self._external_bboxes else self._crop_bbox
 
     def submit_frame(self, frame: np.ndarray) -> None:
         with self._frame_lock:
             self._latest_frame = frame.copy()
             self._frame_version += 1
 
-    def submit_hand_bbox(self, bbox: tuple[int, int, int, int] | None) -> None:
+    def submit_hand_bboxes(self, bboxes: list[tuple[int, int, int, int]]) -> None:
         with self._state_lock:
-            self._external_bbox = bbox
+            self._external_bboxes = list(bboxes)
 
     def start(self) -> bool:
         self._thread = threading.Thread(target=self._run, daemon=True, name="alphabet-worker")
@@ -146,6 +146,52 @@ class AlphabetWorker:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+
+    def _crop_and_detect(self, landmarker, frame: np.ndarray, bbox: tuple[int, int, int, int],
+                         frame_w: int, frame_h: int) -> np.ndarray:
+        """Crop frame to bbox, run MediaPipe, return (42, 3) landmarks in full-frame coords."""
+        x0, y0, w, h = bbox
+        x0 = max(0, min(x0, frame_w - 1))
+        y0 = max(0, min(y0, frame_h - 1))
+        w = max(1, min(w, frame_w - x0))
+        h = max(1, min(h, frame_h - y0))
+        crop_rect = (x0, y0, w, h)
+
+        crop_bgr, crop_rect = crop_frame(frame, crop_rect)
+        if crop_bgr.size > 0:
+            input_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+        else:
+            input_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            crop_rect = None
+            return np.zeros((42, 3), dtype=np.float32)
+
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=input_rgb)
+        results = landmarker.detect(mp_image)
+        landmarks = _landmarks_from_results(results)
+        if crop_rect is not None:
+            landmarks = remap_landmarks_to_full_frame(landmarks, crop_rect, (frame_w, frame_h))
+        return landmarks
+
+    def _process_hand_bboxes(self, landmarker, frame: np.ndarray,
+                              bboxes: list[tuple[int, int, int, int]],
+                              frame_w: int, frame_h: int) -> FrameLandmarks:
+        """Process one or more hand bboxes; detect far-apart hands separately."""
+        if len(bboxes) == 1:
+            landmarks = self._crop_and_detect(landmarker, frame, bboxes[0], frame_w, frame_h)
+            return FrameLandmarks(landmarks=landmarks, crop_bbox=bboxes[0])
+
+        # Multiple bboxes: run MP on each, combine landmarks
+        combined = np.zeros((42, 3), dtype=np.float32)
+        for i, bbox in enumerate(bboxes):
+            lm = self._crop_and_detect(landmarker, frame, bbox, frame_w, frame_h)
+            start = 0 if i == 0 else 21
+            if i == 0:
+                combined[:21] = lm[:21]
+            else:
+                combined[21:] = lm[21:]
+
+        display_bbox = bboxes[0]
+        return FrameLandmarks(landmarks=combined, crop_bbox=display_bbox)
 
     def health(self) -> dict:
         """Return worker health status."""
@@ -219,33 +265,13 @@ class AlphabetWorker:
                         frame_queue.clear()
                         last_pred_time = 0.0
 
-                # Check for externally provided bbox first (e.g. from RTMLib)
+                # Check for externally provided bboxes first (e.g. from RTMLib)
                 with self._state_lock:
-                    ext_bbox = self._external_bbox
+                    ext_bboxes = list(self._external_bboxes)
 
-                if ext_bbox is not None:
+                if ext_bboxes:
                     frame_h, frame_w = frame.shape[:2]
-                    x0, y0, w, h = ext_bbox
-                    # Clamp bounding box boundaries
-                    x0 = max(0, min(x0, frame_w - 1))
-                    y0 = max(0, min(y0, frame_h - 1))
-                    w = max(1, min(w, frame_w - x0))
-                    h = max(1, min(h, frame_h - y0))
-                    crop_rect = (x0, y0, w, h)
-
-                    crop_bgr, crop_rect = crop_frame(frame, crop_rect)
-                    if crop_bgr.size > 0:
-                        input_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
-                    else:
-                        input_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        crop_rect = None
-
-                    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=input_rgb)
-                    results = landmarker.detect(mp_image)
-                    landmarks = _landmarks_from_results(results)
-                    if crop_rect is not None:
-                        landmarks = remap_landmarks_to_full_frame(landmarks, crop_rect, (frame_w, frame_h))
-                    result = FrameLandmarks(landmarks=landmarks, crop_bbox=crop_rect)
+                    result = self._process_hand_bboxes(landmarker, frame, ext_bboxes, frame_w, frame_h)
                 else:
                     result = extract_frame_landmarks_detailed(
                         landmarker,

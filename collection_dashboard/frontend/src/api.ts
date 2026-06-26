@@ -4,6 +4,7 @@ export type GlossInfo = {
   label_id: number;
   word: string;
   display_name: string;
+  display_name_ml: string | null;
   completed_count: number;
   samples_per_word: number;
   is_complete: boolean;
@@ -40,6 +41,7 @@ export type CollectedWord = {
   word: string;
   label_id: number;
   display_name: string;
+  display_name_ml: string | null;
   completed_count: number;
   slots: SlotInfo[];
   references: Array<{ index: number; url: string }>;
@@ -54,6 +56,7 @@ export type Overview = {
   incomplete_words: Array<{
     word: string;
     display_name: string;
+    display_name_ml: string | null;
     completed_count: number;
     remaining: number;
   }>;
@@ -185,6 +188,7 @@ export function updateWordTiming(
     ok: boolean;
     word: string;
     display_name: string;
+    display_name_ml: string | null;
     cooldown_sec: number;
     ref_countdown_sec: number;
   }>(`/api/words/${encodeURIComponent(word)}/timing`, {
@@ -221,12 +225,14 @@ export type Include50Eval = {
     best_classes: Array<{
       word: string;
       display_name: string;
+      display_name_ml: string | null;
       accuracy: number;
       n_test: number;
     }>;
     worst_classes: Array<{
       word: string;
       display_name: string;
+      display_name_ml: string | null;
       accuracy: number;
       n_test: number;
       top_confusions?: Array<{ word: string; count: number }>;
@@ -234,6 +240,7 @@ export type Include50Eval = {
     check_skeleton_classes: Array<{
       label_id: number;
       word: string;
+      display_name_ml: string | null;
       reason: string;
       accuracy: number;
     }>;
@@ -245,6 +252,7 @@ export type CorpusGlossInfo = {
   label_id: number;
   word: string;
   display_name: string;
+  display_name_ml: string | null;
   clip_count: number;
   in_include50: boolean;
 };

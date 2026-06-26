@@ -60,7 +60,7 @@ export default function RecordedClipsPanel({ word, onRefresh, onOpenReview }: Pr
     <section className="recorded-panel">
       <div className="recorded-header">
         <h3>
-          Recorded clips — {data?.display_name ?? word.replace(/_/g, " ")} (
+          Recorded clips — {data?.display_name ?? word.replace(/_/g, " ")}{data?.display_name_ml ? <span className="ml-name"> {data.display_name_ml}</span> : ""} (
           {data?.completed_count ?? 0}/10)
         </h3>
         {onOpenReview && (

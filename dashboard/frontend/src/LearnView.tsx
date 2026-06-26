@@ -50,7 +50,7 @@ export default function LearnView() {
     if (tab === "sentences" && timeline) {
       if (currentSegmentGloss) {
         const g = glosses.find((x) => x.gloss === currentSegmentGloss);
-        return g?.display_name ?? currentSegmentGloss.replace(/_/g, " ");
+        return (g?.display_name ?? currentSegmentGloss.replace(/_/g, " ")) + (g?.display_name_ml ? ` (${g.display_name_ml})` : "");
       }
       return "Full sentence";
     }
@@ -161,8 +161,7 @@ export default function LearnView() {
                   <span key={`${g}-${i}`} className="gloss-step">
                     {i > 0 && <span className="arrow">→</span>}
                     <span className="chip">
-                      {glosses.find((x) => x.gloss === g)?.display_name ??
-                        g.replace(/_/g, " ")}
+                      {(() => { const gi = glosses.find((x) => x.gloss === g); return (gi?.display_name ?? g.replace(/_/g, " ")) + (gi?.display_name_ml ? ` (${gi.display_name_ml})` : ""); })()}
                     </span>
                   </span>
                 ))}

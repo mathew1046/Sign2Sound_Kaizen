@@ -14,6 +14,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export type LearnGlossInfo = {
   gloss: string;
   display_name: string;
+  display_name_ml: string | null;
   label_id: number;
   variant_count: number;
   default_exemplar_id: string | null;
@@ -23,6 +24,7 @@ export type LearnGlossInfo = {
 export type SignDetail = {
   gloss: string;
   display_name: string;
+  display_name_ml: string | null;
   default_exemplar_id: string | null;
   variants: Array<{
     exemplar_id: string;
@@ -142,6 +144,7 @@ export type AnalyzeResponse = {
 export type OrientationReferenceMeta = {
   sign_id: string;
   display_name: string;
+  display_name_ml: string | null;
   sign_type: "static" | "dynamic";
   active_hand: "left" | "right";
   critical_features: string[];
@@ -184,6 +187,7 @@ export type GlossInfo = {
   label_id: number;
   word: string;
   display_name: string;
+  display_name_ml: string | null;
   completed_count: number;
   samples_per_word: number;
   is_complete: boolean;
@@ -220,6 +224,7 @@ export type CollectedWord = {
   word: string;
   label_id: number;
   display_name: string;
+  display_name_ml: string | null;
   completed_count: number;
   slots: SlotInfo[];
   references: Array<{ index: number; url: string }>;
@@ -234,6 +239,7 @@ export type Overview = {
   incomplete_words: Array<{
     word: string;
     display_name: string;
+    display_name_ml: string | null;
     completed_count: number;
     remaining: number;
   }>;
@@ -364,6 +370,7 @@ export function updateWordTiming(
     ok: boolean;
     word: string;
     display_name: string;
+    display_name_ml: string | null;
     cooldown_sec: number;
     ref_countdown_sec: number;
   }>(`/api/words/${encodeURIComponent(word)}/timing`, {
@@ -402,12 +409,14 @@ export type Include50Eval = {
     best_classes: Array<{
       word: string;
       display_name: string;
+      display_name_ml: string | null;
       accuracy: number;
       n_test: number;
     }>;
     worst_classes: Array<{
       word: string;
       display_name: string;
+      display_name_ml: string | null;
       accuracy: number;
       n_test: number;
       top_confusions?: Array<{ word: string; count: number }>;
@@ -415,6 +424,7 @@ export type Include50Eval = {
     check_skeleton_classes: Array<{
       label_id: number;
       word: string;
+      display_name_ml: string | null;
       reason: string;
       accuracy: number;
     }>;
@@ -426,6 +436,7 @@ export type CorpusGlossInfo = {
   label_id: number;
   word: string;
   display_name: string;
+  display_name_ml: string | null;
   clip_count: number;
   in_include50: boolean;
 };
@@ -462,4 +473,36 @@ export function include50ClipUrl(word: string, stem: string) {
 
 export function include50SkeletonUrl(word: string, stem: string, frameIdx: number) {
   return `${API}/api/include50/clips/${encodeURIComponent(word)}/${encodeURIComponent(stem)}/skeleton/${frameIdx}.png`;
+}
+
+// --- Data collection consent ---
+
+export type ConsentStatus = {
+  ok: boolean;
+  consented: boolean;
+  record?: {
+    consented: boolean;
+    consent_version: number;
+    recorded_at: string;
+    rgb_not_public: boolean;
+    skeleton_may_be_public: boolean;
+  } | null;
+};
+
+export function getConsentStatus() {
+  return fetchJson<ConsentStatus>("/api/consent");
+}
+
+export function recordConsent(agreed: boolean, consentVersion = 1) {
+  return fetchJson<{ ok: boolean; consented: boolean }>("/api/consent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agreed, consent_version: consentVersion }),
+  });
+}
+
+export function withdrawConsent() {
+  return fetchJson<{ ok: boolean; consented: boolean }>("/api/consent", {
+    method: "DELETE",
+  });
 }

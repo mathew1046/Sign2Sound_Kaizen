@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CollectionView from "./CollectionView";
+import ConsentModal from "./ConsentModal";
 import ExploreView from "./ExploreView";
 import LearnView from "./LearnView";
 import OverviewView from "./OverviewView";
@@ -12,9 +13,11 @@ import {
   enableCamera,
   getCameraStatus,
   getCollectionVocab,
+  getConsentStatus,
   getCorpusVocab,
   getEngineStatus,
   pauseEngine,
+  recordConsent,
   resetAllData,
   resumeEngine,
   startEngine,
@@ -40,6 +43,8 @@ export default function App() {
   const [totalTarget, setTotalTarget] = useState(500);
   const [error, setError] = useState<string | null>(null);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
+  const [consented, setConsented] = useState(false);
   const followEngineRef = useRef(true);
 
   const collectionActive =
@@ -56,6 +61,9 @@ export default function App() {
         setExploreSelected((prev) => prev ?? v.glosses[0] ?? null);
       })
       .catch((e) => setError(String(e)));
+    getConsentStatus()
+      .then((s) => setConsented(s.consented))
+      .catch(() => {});
   }, []);
 
   const refreshVocab = useCallback(() => {
@@ -119,6 +127,10 @@ export default function App() {
   };
 
   const startCollection = async () => {
+    if (!consented) {
+      setShowConsent(true);
+      return;
+    }
     try {
       setError(null);
       const cam = await enableCamera();
@@ -180,6 +192,21 @@ export default function App() {
     } catch (e) {
       setError(String(e));
     }
+  };
+
+  const handleConsentAccept = async () => {
+    try {
+      await recordConsent(true);
+      setConsented(true);
+      setShowConsent(false);
+      startCollection();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleConsentDecline = () => {
+    setShowConsent(false);
   };
 
   const handleReset = async () => {
@@ -283,6 +310,13 @@ export default function App() {
       </nav>
 
       {error && <p className="error banner">{error}</p>}
+
+      {showConsent && (
+        <ConsentModal
+          onAccept={handleConsentAccept}
+          onDecline={handleConsentDecline}
+        />
+      )}
 
       {tab === "learn" ? (
         <LearnView />

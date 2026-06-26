@@ -49,7 +49,7 @@ export default function OverviewView() {
       <ul className="incomplete-list">
         {data.incomplete_words.map((w) => (
           <li key={w.word}>
-            <strong>{w.display_name}</strong>
+            <strong>{w.display_name}{w.display_name_ml ? <span className="ml-name"> {w.display_name_ml}</span> : ""}</strong>
             <span>
               {w.completed_count}/10 — {w.remaining} remaining
             </span>

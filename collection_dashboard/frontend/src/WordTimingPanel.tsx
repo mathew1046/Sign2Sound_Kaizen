@@ -56,7 +56,7 @@ export default function WordTimingPanel({ word, onUpdated }: Props) {
 
   return (
     <section className="word-timing-panel">
-      <h3>Wait times — {word.display_name}</h3>
+      <h3>Wait times — {word.display_name}{word.display_name_ml ? <span className="ml-name"> {word.display_name_ml}</span> : ""}</h3>
       <p className="muted timing-hint">
         Per-word gaps between clips and after reference videos. Use 0 for no wait.
       </p>
