@@ -1,4 +1,4 @@
-"""Background glove serial reader with anti-FP gates."""
+"""Background glove TCP reader with anti-FP gates."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-import serial
 
 from fusion.tokens import SignToken
 
@@ -19,46 +18,30 @@ GLOVE_ROOT = Path(__file__).resolve().parents[1] / "GloveTalk"
 WINDOW_SIZE = 30
 NUM_RAW_FEATURES = 18
 IMU_INDICES = {0, 1, 2, 3, 9, 10, 11, 12}
-BAUD_RATE = 115200
 FLEX_INDICES = [i for i in range(NUM_RAW_FEATURES) if i not in IMU_INDICES]
 BUFFER_CLEAR_INTERVAL_SEC = 3.0
-
-
-def parse_glove_line(line: str) -> list[float] | None:
-    try:
-        line = line.strip()
-        if not line or "|" not in line:
-            return None
-        parts = line.split("|")
-        if len(parts) < 2:
-            return None
-        l_data = parts[0].strip().split(",")[1:]
-        r_data = parts[1].strip().split(",")[1:]
-        values = [float(x) for x in l_data] + [float(x) for x in r_data]
-        if len(values) != NUM_RAW_FEATURES:
-            return None
-        return values
-    except Exception:
-        return None
+DEFAULT_GLOVE_TCP_PORT = 8080
 
 
 class GloveWorker:
-    """Read glove serial stream and emit SignToken objects on a queue."""
+    """Read glove TCP stream and emit SignToken objects on a queue."""
 
     def __init__(
         self,
-        port: str = "/dev/ttyUSB0",
+        tcp_port: int = DEFAULT_GLOVE_TCP_PORT,
         *,
         margin_threshold: float = 0.25,
         activity_threshold: float = 0.02,
         consecutive_required: int = 5,
         calibration_file: Path | None = None,
+        connect_timeout_sec: float = 15.0,
     ):
-        self.port = port
+        self.tcp_port = tcp_port
         self.margin_threshold = margin_threshold
         self.activity_threshold = activity_threshold
         self.consecutive_required = consecutive_required
         self.calibration_file = calibration_file or (GLOVE_ROOT / "sensor_calibration.json")
+        self.connect_timeout_sec = connect_timeout_sec
 
         self._queue: queue.Queue[SignToken] = queue.Queue(maxsize=32)
         self._stop = threading.Event()
@@ -77,7 +60,7 @@ class GloveWorker:
     def start(self) -> bool:
         self._thread = threading.Thread(target=self._run, daemon=True, name="glove-worker")
         self._thread.start()
-        deadline = time.time() + 3.0
+        deadline = time.time() + self.connect_timeout_sec
         while time.time() < deadline:
             if self._available:
                 return True
@@ -101,8 +84,8 @@ class GloveWorker:
             self._thread.join(timeout=2.0)
 
     def _run(self) -> None:
+        ser = None
         try:
-            # GloveTalk must precede repo root so `scripts.preprocess` resolves correctly.
             glove_root = str(GLOVE_ROOT.resolve())
             if glove_root not in sys.path:
                 sys.path.insert(0, glove_root)
@@ -110,6 +93,7 @@ class GloveWorker:
             import tensorflow as tf  # noqa: WPS433
 
             from inference.feature_utils import GloveFeatureBuffer, load_scaler  # noqa: WPS433
+            from inference.glove_io import TCPSerial, parse_glove_line  # noqa: WPS433
             from paths import WORDS_CLASSES, WORDS_MODEL, WORDS_SCALER  # noqa: WPS433
 
             with open(self.calibration_file) as f:
@@ -122,20 +106,35 @@ class GloveWorker:
             scaler = load_scaler(WORDS_SCALER)
             feature_buffer = GloveFeatureBuffer(window_size=WINDOW_SIZE)
 
-            ser = serial.Serial(self.port, BAUD_RATE, timeout=0.5)
-            time.sleep(0.3)
-            ser.reset_input_buffer()
-            self._available = True
-            print(f"[glove] connected on {self.port}")
+            ser = TCPSerial(port=self.tcp_port)
+            time.sleep(0.5)
+
+            stream_deadline = time.time() + self.connect_timeout_sec
+            while time.time() < stream_deadline and not self._stop.is_set():
+                if ser.in_waiting:
+                    line = ser.readline().decode("utf-8", errors="ignore")
+                    if parse_glove_line(line):
+                        ser.reset_input_buffer()
+                        self._available = True
+                        print(f"[glove] TCP stream OK on port {self.tcp_port}")
+                        break
+                time.sleep(0.01)
+            else:
+                if not self._stop.is_set():
+                    raise TimeoutError(
+                        f"No glove data on TCP port {self.tcp_port} within {self.connect_timeout_sec}s"
+                    )
 
             consecutive: list[str] = []
             last_buffer_clear = time.time()
             raw_flex_window: list[list[float]] = []
 
             while not self._stop.is_set():
-                line = ser.readline().decode("utf-8", errors="ignore")
-                if not line:
+                if not ser.in_waiting:
+                    time.sleep(0.001)
                     continue
+
+                line = ser.readline().decode("utf-8", errors="ignore")
                 parsed = parse_glove_line(line)
                 if not parsed:
                     continue
@@ -212,8 +211,14 @@ class GloveWorker:
                     else:
                         consecutive.pop(0)
 
-            ser.close()
+            if ser is not None:
+                ser.close()
         except Exception as exc:
             self._error = str(exc)
             self._available = False
             print(f"[glove] disabled: {exc}")
+            if ser is not None:
+                try:
+                    ser.close()
+                except Exception:
+                    pass

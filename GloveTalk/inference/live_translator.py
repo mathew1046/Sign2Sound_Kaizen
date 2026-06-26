@@ -5,39 +5,19 @@ from pathlib import Path
 
 import numpy as np
 import pyttsx3
-import serial
 import tensorflow as tf
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from inference.feature_utils import GloveFeatureBuffer, load_scaler
+from inference.glove_io import DEFAULT_GLOVE_TCP_PORT, TCPSerial, parse_glove_line
 from paths import FEATURE_CONFIG, WORDS_CLASSES, WORDS_MODEL, WORDS_SCALER
 
 WINDOW_SIZE = 30
 NUM_RAW_FEATURES = 18
 IMU_INDICES = {0, 1, 2, 3, 9, 10, 11, 12}
-BAUD_RATE = 115200
-GLOVE_SERIAL_PORT = "/dev/ttyUSB0"
-
-
-def parse_line(line):
-    try:
-        line = line.strip()
-        if not line or "|" not in line:
-            return None
-        parts = line.split("|")
-        if len(parts) < 2:
-            return None
-        l_data = parts[0].strip().split(",")[1:]
-        r_data = parts[1].strip().split(",")[1:]
-        values = [float(x) for x in l_data] + [float(x) for x in r_data]
-        if len(values) != NUM_RAW_FEATURES:
-            return None
-        return values
-    except Exception:
-        return None
-
+TCP_PORT = DEFAULT_GLOVE_TCP_PORT
 
 CALIBRATION_FILE = ROOT / "sensor_calibration.json"
 
@@ -67,16 +47,16 @@ classes = np.load(WORDS_CLASSES, allow_pickle=True)
 scaler = load_scaler(WORDS_SCALER)
 feature_buffer = GloveFeatureBuffer(window_size=WINDOW_SIZE)
 
-print(f"Opening glove port {GLOVE_SERIAL_PORT}...")
+print(f"Starting Wi-Fi receiver on port {TCP_PORT}...")
 try:
-    ser = serial.Serial(GLOVE_SERIAL_PORT, BAUD_RATE, timeout=0.5)
-except (serial.SerialException, OSError) as exc:
-    print(f"Cannot open {GLOVE_SERIAL_PORT}: {exc}")
+    ser = TCPSerial(port=TCP_PORT)
+    time.sleep(2)
+except Exception as exc:
+    print(f"Connection error: {exc}")
     raise SystemExit(1)
 
-time.sleep(0.3)
 ser.reset_input_buffer()
-print(f"Connected on {GLOVE_SERIAL_PORT} (locked for this session)")
+print(f"Listening on port {TCP_PORT} (locked for this session)")
 print(f"Classes ({len(classes)}): {', '.join(classes)}")
 print("=== SYSTEM ONLINE: SHOW GESTURES NATURALLY ===")
 
@@ -87,13 +67,15 @@ last_buffer_clear = time.time()
 print("Waiting for glove data...", flush=True)
 stream_deadline = time.time() + 10.0
 while time.time() < stream_deadline:
-    line = ser.readline().decode("utf-8", errors="ignore")
-    if parse_line(line):
-        print("Glove stream OK — start signing.\n", flush=True)
-        ser.reset_input_buffer()
-        break
+    if ser.in_waiting:
+        line = ser.readline().decode("utf-8", errors="ignore")
+        if parse_glove_line(line):
+            print("Glove stream OK — start signing.\n", flush=True)
+            ser.reset_input_buffer()
+            break
+    time.sleep(0.01)
 else:
-    print("ERROR: No glove data received. Check both gloves are on and USB is connected.")
+    print("ERROR: No glove data received. Check both gloves are on and Wi-Fi is connected.")
     ser.close()
     raise SystemExit(1)
 
@@ -112,12 +94,12 @@ def normalize_frame(raw_data):
 
 while True:
     try:
-        line = ser.readline().decode("utf-8", errors="ignore")
-        if not line:
+        if not ser.in_waiting:
             time.sleep(0.001)
             continue
 
-        parsed = parse_line(line)
+        line = ser.readline().decode("utf-8", errors="ignore")
+        parsed = parse_glove_line(line)
         if not parsed:
             continue
 
