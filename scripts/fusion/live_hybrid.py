@@ -128,6 +128,50 @@ def draw_hand_crop_bbox(
     )
 
 
+def get_hand_bbox_from_rtmlib(hands: np.ndarray, frame_w: int, frame_h: int, pad_frac: float = 0.15) -> tuple[int, int, int, int] | None:
+    # hands shape is (42, 2). Left hand is hands[:21], Right hand is hands[21:]
+    lh = hands[:21]
+    rh = hands[21:]
+    
+    lh_valid = lh[np.any(lh != 0, axis=1)]
+    rh_valid = rh[np.any(rh != 0, axis=1)]
+    
+    pts = []
+    if len(lh_valid) >= 5:
+        pts.append(lh_valid)
+    if len(rh_valid) >= 5:
+        pts.append(rh_valid)
+        
+    if not pts:
+        return None
+        
+    valid_pts = np.concatenate(pts, axis=0)
+    
+    x_coords = valid_pts[:, 0] * frame_w
+    y_coords = valid_pts[:, 1] * frame_h
+    
+    x_min = int(np.min(x_coords))
+    y_min = int(np.min(y_coords))
+    x_max = int(np.max(x_coords))
+    y_max = int(np.max(y_coords))
+    
+    w = x_max - x_min
+    h = y_max - y_min
+    
+    if w < 12 or h < 12:
+        return None
+        
+    pad_w = int(w * pad_frac)
+    pad_h = int(h * pad_frac)
+    
+    x0 = max(0, x_min - pad_w)
+    y0 = max(0, y_min - pad_h)
+    x1 = min(frame_w, x_max + pad_w)
+    y1 = min(frame_h, y_max + pad_h)
+    
+    return (x0, y0, x1 - x0, y1 - y0)
+
+
 def run_live(args: argparse.Namespace) -> None:
     path = ensure_project_env()
     if path is not None:
@@ -329,10 +373,17 @@ def run_live(args: argparse.Namespace) -> None:
                 last_pose_wall = now
 
                 hands, body, face = mspt_live.wholebody_to_viz(wb)
+                
+                # Get hand bbox from active RTMLib keypoints and submit it to alphabet worker
+                h_h, h_w = frame.shape[:2]
+                hand_bbox = get_hand_bbox_from_rtmlib(hands, h_w, h_h, pad_frac=args.crop_pad)
+                if alphabet is not None:
+                    alphabet.submit_hand_bbox(hand_bbox)
                 last_hands, last_body, last_face = hands, body, face
                 detected_mode = mode_detector.update(hands, body)
                 if policy.manual_mode is None:
                     policy.set_auto_mode(detected_mode)
+                policy.set_alphabet_weight(mode_detector.alphabet_weight)
                 cached_skel = mspt_live.render_skeleton_panel(
                     last_hands, last_body, last_face, panel_size=args.skeleton_panel_size,
                 )
@@ -352,7 +403,7 @@ def run_live(args: argparse.Namespace) -> None:
                         )
                         if last_preds:
                             display_preds = last_preds
-                            pred_visible_until = now + args.hold_pred_sec
+                            pred_visible_until = now + 1.5
                         if last_preds and last_preds[0][0] != "uncertain":
                             gloss, conf = last_preds[0]
                             decision = policy.on_mspt(gloss, conf, time.time())
@@ -364,6 +415,10 @@ def run_live(args: argparse.Namespace) -> None:
 
             if composer is not None:
                 composer.tick(now)
+
+            # Auto-flush spell buffer if idle
+            spell_timeout_decision = policy.check_spell_timeout(now)
+            _apply_decision(spell_timeout_decision, composer=composer, tts=tts, now=now)
 
             display = frame.copy()
             display_phase = segmenter.display_phase
@@ -388,7 +443,7 @@ def run_live(args: argparse.Namespace) -> None:
                 segmenter_mode=args.segmenter,
             )
             preds_visible = bool(display_preds) and now < pred_visible_until
-            recording_ui = display_phase in ("recording", "signing") and not preds_visible
+            recording_ui = display_phase in ("recording", "signing")
             mspt_live.draw_predictions_large(
                 display,
                 display_preds if preds_visible else [],

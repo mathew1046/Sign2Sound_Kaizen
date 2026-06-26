@@ -50,9 +50,9 @@ class SegmenterConfig:
     offset_frames: int = 8
     trim_pad_frames: int = 2
     # Fixed timer mode
-    clip_sec: float = 2.5
-    gap_sec: float = 1.0
-    hold_pred_sec: float = 5.0
+    clip_sec: float = 2.0
+    gap_sec: float = 0.2
+    hold_pred_sec: float = 0.2
     min_motion_frames: int = 6
     motion_threshold: float = 0.008
     # Confidence sliding window

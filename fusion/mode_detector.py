@@ -33,6 +33,19 @@ class ModeDetector:
     _alphabet_votes: int = 0
     _word_votes: int = 0
 
+    @property
+    def alphabet_weight(self) -> float:
+        """Continuous 0.0–1.0 weight toward alphabet mode.
+
+        Based on the ratio of alphabet votes in the recent window.
+        Used by FusionPolicy for soft mode transitions so high-confidence
+        predictions from the "off" mode can still break through.
+        """
+        total = self._alphabet_votes + self._word_votes
+        if total == 0:
+            return 0.0 if self.mode == "word" else 1.0
+        return self._alphabet_votes / total
+
     def _joint_motion(self, cur: np.ndarray, prev: np.ndarray | None) -> float:
         if prev is None or cur.shape != prev.shape:
             return 0.0
@@ -64,7 +77,12 @@ class ModeDetector:
         hands_ok = self._hands_visible(hands)
 
         vote: SigningMode = self.mode
-        if body_e >= self.config.body_word_min:
+        if not hands_ok:
+            vote = "word"
+        elif body_e >= self.config.body_word_min:
+            vote = "word"
+        elif hand_e < self.config.hand_motion_min * 0.5:
+            # Low/resting hand motion returns to word mode
             vote = "word"
         elif (
             hands_ok
@@ -72,8 +90,6 @@ class ModeDetector:
             and hand_e >= self.config.hand_motion_min
             and hand_e / (body_e + 1e-6) >= self.config.hand_body_ratio_min
         ):
-            vote = "alphabet"
-        elif hands_ok and body_e <= self.config.body_spell_max * 0.5 and hand_e >= self.config.hand_motion_min * 0.5:
             vote = "alphabet"
 
         if vote == "alphabet":
@@ -94,6 +110,7 @@ class ModeDetector:
     def debug(self) -> dict:
         return {
             "mode": self.mode,
+            "alphabet_weight": self.alphabet_weight,
             "hand_motion_ema": self.config.hand_motion_ema,
             "body_motion_ema": self.config.body_motion_ema,
             "alphabet_votes": self._alphabet_votes,

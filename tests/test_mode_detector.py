@@ -67,5 +67,55 @@ class TestModeDetector:
             det.update(hands, body)
         assert det.mode == "word"
         for _ in range(3):
+            hands = _hands_with_motion(hands, 0.015)
             det.update(hands, body)
         assert det.mode == "alphabet"
+
+    def test_low_hand_motion_switches_back_to_word(self):
+        det = ModeDetector(
+            ModeDetectorConfig(
+                switch_frames=3,
+                body_spell_max=0.008,
+                hand_motion_min=0.002,
+                hand_body_ratio_min=2.0,
+            )
+        )
+        # 1. Transition to alphabet mode first
+        hands = _hands_with_motion(None, 0.0)
+        body = _body_with_motion(None, 0.0)
+        for _ in range(5):
+            hands = _hands_with_motion(hands, 0.015)
+            body = _body_with_motion(body, 0.001)
+            det.update(hands, body)
+        assert det.mode == "alphabet"
+
+        # 2. Stop hand motion (rest/very low delta)
+        for _ in range(15):
+            hands = _hands_with_motion(hands, 0.0001)
+            body = _body_with_motion(body, 0.0001)
+            det.update(hands, body)
+        assert det.mode == "word"
+
+    def test_hidden_hands_switches_back_to_word(self):
+        det = ModeDetector(
+            ModeDetectorConfig(
+                switch_frames=3,
+                body_spell_max=0.008,
+                hand_motion_min=0.002,
+                hand_body_ratio_min=2.0,
+            )
+        )
+        # 1. Transition to alphabet mode first
+        hands = _hands_with_motion(None, 0.0)
+        body = _body_with_motion(None, 0.0)
+        for _ in range(5):
+            hands = _hands_with_motion(hands, 0.015)
+            body = _body_with_motion(body, 0.001)
+            det.update(hands, body)
+        assert det.mode == "alphabet"
+
+        # 2. Make hands invisible (zeros)
+        invisible_hands = np.zeros((42, 2), dtype=np.float32)
+        for _ in range(5):
+            det.update(invisible_hands, body)
+        assert det.mode == "word"

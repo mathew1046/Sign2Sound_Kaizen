@@ -5,6 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from fusion.calibration import (
+    ALPHABET_CALIBRATION,
+    GLOVE_CALIBRATION,
+    MSPT_CALIBRATION,
+    CalibrationParams,
+    disagreement_penalty,
+    noisy_or,
+)
 from fusion.tokens import SignToken
 from fusion.vocabulary import FusionVocabulary
 
@@ -32,8 +40,22 @@ class FusionPolicy:
     glove_fallback: bool = False
     glove_fallback_silent_sec: float = 3.0
 
+    # --- Soft mode transition parameters ---
+    soft_mode: bool = True
+    soft_mode_breakthrough: float = 0.90
+    # alphabet_weight is supplied externally from ModeDetector
+
+    # --- Spell auto-flush ---
+    spell_idle_timeout_sec: float = 2.0
+
+    # --- Calibration ---
+    mspt_calibration: CalibrationParams = field(default_factory=lambda: MSPT_CALIBRATION)
+    alphabet_calibration: CalibrationParams = field(default_factory=lambda: ALPHABET_CALIBRATION)
+    glove_calibration: CalibrationParams = field(default_factory=lambda: GLOVE_CALIBRATION)
+
     auto_mode: str = "word"
     manual_mode: ManualMode = None
+    _alphabet_weight: float = 0.0
 
     last_mspt_time: float = 0.0
     last_mspt_gloss: str = ""
@@ -54,6 +76,17 @@ class FusionPolicy:
     @property
     def spell_mode(self) -> bool:
         return self.is_alphabet_mode
+
+    @property
+    def alphabet_weight(self) -> float:
+        """Continuous mode weight (0.0 = word, 1.0 = alphabet)."""
+        if self.manual_mode is not None:
+            return 1.0 if self.manual_mode == "alphabet" else 0.0
+        return self._alphabet_weight
+
+    def set_alphabet_weight(self, weight: float) -> None:
+        """Update the soft mode weight from ModeDetector."""
+        self._alphabet_weight = max(0.0, min(1.0, weight))
 
     def set_auto_mode(self, mode: str) -> None:
         if mode in ("word", "alphabet"):
@@ -84,33 +117,95 @@ class FusionPolicy:
         self.toggle_manual_mode()
         return self.is_alphabet_mode
 
+    # --- Internal helpers ---
+
     def _prune_glove(self, now: float) -> None:
         self.recent_glove = [
             t for t in self.recent_glove if now - t.timestamp <= self.glove_agree_window_sec
         ]
 
-    def _glove_agrees(self, mspt_gloss: str, now: float) -> bool:
+    def _glove_agrees(self, mspt_gloss: str, now: float) -> tuple[bool, float]:
+        """Check if any recent glove token agrees with mspt_gloss.
+
+        Returns (agreed, best_glove_calibrated_confidence).
+        """
         self._prune_glove(now)
+        best_conf = 0.0
         for token in self.recent_glove:
             slug = self.vocab.glove_to_mspt_slug(token.gloss)
             if slug == mspt_gloss:
-                return True
-        return False
+                cal = self.glove_calibration.calibrate(token.confidence)
+                best_conf = max(best_conf, cal)
+        return best_conf > 0.0, best_conf
+
+    def _recent_glove_label(self, now: float) -> tuple[str | None, float]:
+        """Return the most recent glove label + calibrated confidence within the window."""
+        self._prune_glove(now)
+        if not self.recent_glove:
+            return None, 0.0
+        latest = self.recent_glove[-1]
+        slug = self.vocab.glove_to_mspt_slug(latest.gloss)
+        cal = self.glove_calibration.calibrate(latest.confidence)
+        return slug, cal
+
+    # --- Decision entry points ---
 
     def on_mspt(self, gloss: str, confidence: float, now: float) -> FusionDecision:
-        if self.is_alphabet_mode:
+        # Apply soft mode scaling instead of hard blocking
+        if self.soft_mode and self.is_alphabet_mode:
+            word_weight = 1.0 - self.alphabet_weight
+            scaled_conf = confidence * word_weight
+            if scaled_conf < self.soft_mode_breakthrough * self.min_mspt_confidence:
+                return FusionDecision("ignore", reason="mspt_soft_blocked_alphabet_mode")
+            # Allow breakthrough if raw confidence is very high
+            if confidence < self.soft_mode_breakthrough:
+                return FusionDecision("ignore", reason="mspt_soft_blocked_alphabet_mode")
+        elif not self.soft_mode and self.is_alphabet_mode:
             return FusionDecision("ignore", reason="mspt_blocked_alphabet_mode")
+
         if not gloss or gloss == "uncertain" or confidence < self.min_mspt_confidence:
             return FusionDecision("ignore", reason="mspt_uncertain")
 
-        agreed = self._glove_agrees(gloss, now)
+        # Calibrate MSPT confidence
+        cal_mspt = self.mspt_calibration.calibrate(confidence)
+
+        # Check glove agreement and boost via Noisy-OR
+        agreed, glove_cal = self._glove_agrees(gloss, now)
+        if agreed and glove_cal > 0.0:
+            boosted = noisy_or(cal_mspt, glove_cal)
+            meta = {
+                "glove_agreement": True,
+                "raw_confidence": confidence,
+                "calibrated": cal_mspt,
+                "glove_calibrated": glove_cal,
+                "boosted": boosted,
+            }
+            self.last_mspt_time = now
+            self.last_mspt_gloss = gloss
+            return FusionDecision(
+                "accept_mspt",
+                gloss=gloss,
+                confidence=boosted,
+                reason="mspt_glove_boosted",
+                meta=meta,
+            )
+
+        # Check for glove disagreement penalty
+        glove_label, glove_conf = self._recent_glove_label(now)
+        if glove_label is not None and glove_label != gloss and glove_conf > 0.3:
+            cal_mspt = disagreement_penalty(cal_mspt)
+
         self.last_mspt_time = now
         self.last_mspt_gloss = gloss
-        meta = {"glove_agreement": agreed}
+        meta = {
+            "glove_agreement": False,
+            "raw_confidence": confidence,
+            "calibrated": cal_mspt,
+        }
         return FusionDecision(
             "accept_mspt",
             gloss=gloss,
-            confidence=confidence,
+            confidence=cal_mspt,
             reason="mspt_primary",
             meta=meta,
         )
@@ -148,32 +243,43 @@ class FusionPolicy:
             if not (self.is_alphabet_mode and self.vocab.is_glove_letter(label)):
                 silent = token.timestamp - self.last_mspt_time
                 if silent >= self.glove_fallback_silent_sec:
+                    cal = self.glove_calibration.calibrate(token.confidence)
                     return FusionDecision(
                         "accept_glove",
                         gloss=slug,
-                        confidence=token.confidence,
+                        confidence=cal,
                         reason="glove_fallback",
-                        meta={"glove_label": label},
+                        meta={"glove_label": label, "calibrated": cal},
                     )
 
         return FusionDecision("ignore", reason="glove_confirm_only")
 
     def on_alphabet(self, letter: str, confidence: float, now: float) -> FusionDecision:
-        if self.is_word_mode:
+        # Soft mode: allow high-confidence alphabet through word mode
+        if self.soft_mode and self.is_word_mode:
+            alpha_w = self.alphabet_weight
+            scaled_conf = confidence * alpha_w
+            if scaled_conf < self.soft_mode_breakthrough * self.alphabet_threshold:
+                return FusionDecision("ignore", reason="alphabet_soft_blocked_word_mode")
+            if confidence < self.soft_mode_breakthrough:
+                return FusionDecision("ignore", reason="alphabet_soft_blocked_word_mode")
+        elif not self.soft_mode and self.is_word_mode:
             return FusionDecision("ignore", reason="alphabet_blocked_word_mode")
+
         if confidence < self.alphabet_threshold:
             return FusionDecision("ignore", reason="alphabet_low_conf")
         if not letter or len(letter) != 1:
             return FusionDecision("ignore", reason="alphabet_invalid")
 
+        cal = self.alphabet_calibration.calibrate(confidence)
         self.last_spell_activity = now
         self.spell_buffer += letter.upper()
         return FusionDecision(
             "append_letter",
             gloss=letter.upper(),
-            confidence=confidence,
+            confidence=cal,
             reason="alphabet_letter",
-            meta={"spell_buffer": self.spell_buffer},
+            meta={"spell_buffer": self.spell_buffer, "calibrated": cal},
         )
 
     def flush_spell_buffer(self) -> FusionDecision:
@@ -182,6 +288,19 @@ class FusionPolicy:
         word = self.spell_buffer
         self.spell_buffer = ""
         return FusionDecision("flush_spell", gloss=word, reason="spell_flushed")
+
+    def check_spell_timeout(self, now: float) -> FusionDecision:
+        """Auto-flush the spell buffer after idle timeout.
+
+        Call this every frame from the main loop.
+        """
+        if not self.spell_buffer:
+            return FusionDecision("ignore", reason="spell_buffer_empty")
+        if self.last_spell_activity <= 0.0:
+            return FusionDecision("ignore", reason="spell_no_activity")
+        if now - self.last_spell_activity >= self.spell_idle_timeout_sec:
+            return self.flush_spell_buffer()
+        return FusionDecision("ignore", reason="spell_not_timed_out")
 
     @property
     def spell_display(self) -> str:

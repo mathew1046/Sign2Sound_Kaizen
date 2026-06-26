@@ -61,7 +61,7 @@ class TestComposeRules:
         assert not result.needs_llm
 
     def test_multi_needs_llm(self):
-        result = compose_rules(["i", "go", "bank"])
+        result = compose_rules(["i", "want", "eat", "apple", "now"])
         assert result.needs_llm
         assert result.speak == ""
 
@@ -80,20 +80,20 @@ class TestComposeGlosses:
         assert result.source == "rules"
 
     def test_fallback_when_no_gemini(self):
-        result = compose_glosses(["i", "go", "bank"], use_gemini=False)
+        result = compose_glosses(["i", "want", "eat", "apple", "now"], use_gemini=False)
         assert result.source == "fallback_join"
         assert "I" in result.speak
 
     @patch("mspt.gloss_compose.compose_with_gemini")
     def test_gemini_when_rules_insufficient(self, mock_gemini):
         mock_gemini.return_value = ComposeResult(
-            speak="I am going to the bank.",
+            speak="I want to eat an apple now.",
             source="gemini",
             changed=True,
         )
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}):
-            result = compose_glosses(["i", "go", "bank"], use_gemini=True)
-        assert result.speak == "I am going to the bank."
+            result = compose_glosses(["i", "want", "eat", "apple", "now"], use_gemini=True)
+        assert result.speak == "I want to eat an apple now."
         assert result.source == "gemini"
         mock_gemini.assert_called_once()
 

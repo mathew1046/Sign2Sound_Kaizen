@@ -106,6 +106,19 @@ class GloveWorker:
             scaler = load_scaler(WORDS_SCALER)
             feature_buffer = GloveFeatureBuffer(window_size=WINDOW_SIZE)
 
+            # Validate fusion vocabulary against actual glove classes
+            try:
+                from fusion.vocabulary import FusionVocabulary
+
+                vocab = FusionVocabulary()
+                unmapped = vocab.validate_against_glove_classes([str(c) for c in classes])
+                if unmapped:
+                    print(f"[glove] WARNING: fusion vocabulary missing mappings for: {unmapped}")
+                else:
+                    print(f"[glove] fusion vocabulary validated: all {len(classes)} classes mapped")
+            except Exception as exc:
+                print(f"[glove] fusion vocabulary validation skipped: {exc}")
+
             ser = TCPSerial(port=self.tcp_port)
             time.sleep(0.5)
 

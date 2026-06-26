@@ -61,6 +61,45 @@ PRONOUN_COPULA = {
     "you_plural": "are",
 }
 
+# Common ISL verbs for rule-based grammar
+VERBS = frozenset({
+    "go", "want", "need", "like", "eat", "drink", "sleep", "come",
+    "give", "take", "help", "know", "think", "see", "hear", "learn",
+    "teach", "play", "work", "buy", "make", "sit", "stand", "walk",
+    "run", "read", "write", "speak", "tell", "ask", "live",
+})
+
+# Greetings that can open a phrase
+GREETINGS = frozenset({
+    "hello", "good_morning", "good_night", "good_afternoon", "good_evening",
+    "how_are_you", "namaste",
+})
+
+
+def _verb_form(verb: str, subject: str) -> str:
+    """Basic English verb conjugation for present continuous / simple present."""
+    v = verb.replace("_", " ").lower()
+    copula = PRONOUN_COPULA.get(subject.lower(), "is")
+    # Use present continuous for action verbs
+    if v.endswith("e"):
+        v_ing = v[:-1] + "ing"
+    elif len(v) >= 3 and v[-1] not in "aeiou" and v[-2] in "aeiou" and v[-3] not in "aeiou":
+        v_ing = v + v[-1] + "ing"
+    else:
+        v_ing = v + "ing"
+    return f"{copula} {v_ing}"
+
+
+def _needs_article(noun: str) -> str:
+    """Prepend 'the' to common nouns (not pronouns, not compounds)."""
+    n = noun.replace("_", " ").lower()
+    if n in PRONOUNS or "_" in noun:
+        return n
+    if n[0] in "aeiou":
+        return f"an {n}"
+    return f"the {n}"
+
+
 ComposeSource = Literal["rules", "gemini", "fallback_join"]
 
 
@@ -189,6 +228,20 @@ def is_compound_gloss(gloss: str, vocab_csv: Path | None = None) -> bool:
     return g in compounds
 
 
+def deduplicate_glosses(glosses: list[str]) -> list[str]:
+    """Remove consecutive duplicate glosses.
+
+    e.g. ["hello", "hello", "hello", "i", "happy"] → ["hello", "i", "happy"]
+    """
+    if not glosses:
+        return []
+    result = [glosses[0]]
+    for g in glosses[1:]:
+        if g.lower() != result[-1].lower():
+            result.append(g)
+    return result
+
+
 def fallback_join(glosses: list[str]) -> ComposeResult:
     if not glosses:
         return ComposeResult(speak="", source="fallback_join", changed=False)
@@ -204,8 +257,21 @@ def fallback_join(glosses: list[str]) -> ComposeResult:
 
 
 def compose_rules(glosses: list[str], vocab_csv: Path | None = None) -> ComposeResult:
+    """Rule-based ISL gloss → English sentence composition.
+
+    Handles common ISL patterns without needing the Gemini LLM:
+    - Single gloss: direct conversion
+    - Pronoun + adjective: "I happy" → "I am happy."
+    - Pronoun + verb: "I go" → "I am going."
+    - Greeting + pronoun + adjective: "hello I happy" → "Hello, I am happy."
+    - Pronoun + verb + noun: "I go bank" → "I am going to the bank."
+    - 4+ glosses or unrecognized patterns → fall through to LLM
+    """
     if not glosses:
         return ComposeResult(speak="", source="rules", changed=False)
+
+    # Deduplicate consecutive repeats first
+    glosses = deduplicate_glosses(glosses)
 
     if len(glosses) == 1:
         g = glosses[0].lower()
@@ -216,13 +282,117 @@ def compose_rules(glosses: list[str], vocab_csv: Path | None = None) -> ComposeR
         )
 
     if len(glosses) == 2:
-        subj, pred = glosses[0].lower(), glosses[1].lower()
-        if subj in PRONOUNS and is_adjective_gloss(pred, vocab_csv):
-            copula = PRONOUN_COPULA[subj]
-            subj_disp = gloss_to_speech_text(subj, sentence_start=True)
-            pred_disp = gloss_to_speech_text(pred)
+        a, b = glosses[0].lower(), glosses[1].lower()
+
+        # Pronoun + adjective: "I happy" → "I am happy."
+        if a in PRONOUNS and is_adjective_gloss(b, vocab_csv):
+            copula = PRONOUN_COPULA[a]
             return ComposeResult(
-                speak=ensure_sentence(f"{subj_disp} {copula} {pred_disp}"),
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)} {copula} {gloss_to_speech_text(b)}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Pronoun + verb: "I go" → "I am going."
+        if a in PRONOUNS and b in VERBS:
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)} {_verb_form(b, a)}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Greeting + pronoun/greeting: "hello good_morning" → "Hello, good morning."
+        if a in GREETINGS and b in GREETINGS:
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)}, {gloss_to_speech_text(b)}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Greeting + noun/word: "hello teacher" → "Hello, teacher."
+        if a in GREETINGS:
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)}, {gloss_to_speech_text(b)}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Pronoun + noun: "i teacher" → "I am a teacher."
+        if a in PRONOUNS and b not in VERBS and not is_adjective_gloss(b, vocab_csv):
+            copula = PRONOUN_COPULA[a]
+            noun_phrase = _needs_article(b)
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)} {copula} {noun_phrase}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Greeting + pronoun: let LLM handle ("hello I" needs more context)
+
+    if len(glosses) == 3:
+        a, b, c = glosses[0].lower(), glosses[1].lower(), glosses[2].lower()
+
+        # Greeting + pronoun + adjective: "hello I happy" → "Hello, I am happy."
+        if a in GREETINGS and b in PRONOUNS and is_adjective_gloss(c, vocab_csv):
+            copula = PRONOUN_COPULA[b]
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)}, "
+                    f"{gloss_to_speech_text(b)} {copula} {gloss_to_speech_text(c)}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Pronoun + verb + noun (SVO): "I go house" → "I am going to the house."
+        if a in PRONOUNS and b in VERBS and c not in PRONOUNS:
+            noun_phrase = _needs_article(c) if not is_compound_gloss(c) else gloss_to_speech_text(c)
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)} {_verb_form(b, a)} to {noun_phrase}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Pronoun + noun + verb (SOV): "I house go" → "I am going to the house."
+        if a in PRONOUNS and b not in PRONOUNS and b not in VERBS and c in VERBS:
+            noun_phrase = _needs_article(b) if not is_compound_gloss(b) else gloss_to_speech_text(b)
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)} {_verb_form(c, a)} to {noun_phrase}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Pronoun + verb + adjective: "I feel happy" → "I am feeling happy."
+        if a in PRONOUNS and b in VERBS and is_adjective_gloss(c, vocab_csv):
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)} {_verb_form(b, a)} {gloss_to_speech_text(c)}"
+                ),
+                source="rules",
+                changed=True,
+            )
+
+        # Greeting + pronoun + verb: "hello I go" → "Hello, I am going."
+        if a in GREETINGS and b in PRONOUNS and c in VERBS:
+            return ComposeResult(
+                speak=ensure_sentence(
+                    f"{gloss_to_speech_text(a, sentence_start=True)}, "
+                    f"{gloss_to_speech_text(b)} {_verb_form(c, b)}"
+                ),
                 source="rules",
                 changed=True,
             )
@@ -360,8 +530,9 @@ class GlossComposer:
     def __init__(
         self,
         *,
-        utterance_pause_sec: float = 4.0,
+        utterance_pause_sec: float = 2.5,
         max_buffer: int = 8,
+        early_flush_min: int = 3,
         use_gemini: bool = True,
         vocab_csv: Path | None = None,
         on_composed: Callable[[ComposeResult], None] | None = None,
@@ -369,6 +540,7 @@ class GlossComposer:
     ) -> None:
         self.utterance_pause_sec = utterance_pause_sec
         self.max_buffer = max_buffer
+        self.early_flush_min = early_flush_min
         self.use_gemini = use_gemini
         self.speak_enabled = speak_enabled
         self._buffer: list[str] = []
@@ -411,6 +583,9 @@ class GlossComposer:
 
     def add_gloss(self, gloss: str, confidence: float, now: float) -> None:
         if not gloss or gloss == "uncertain":
+            return
+        # Suppress consecutive duplicate glosses
+        if self._buffer and gloss.lower() == self._buffer[-1].lower():
             return
         self._buffer.append(gloss)
         self._last_gloss_time = now

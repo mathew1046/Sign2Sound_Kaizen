@@ -44,9 +44,24 @@ class TestMsptPolicy:
         assert d.action == "ignore"
 
     def test_blocked_in_alphabet_mode(self, policy: FusionPolicy):
+        policy.soft_mode = False
         policy.set_spell_mode(True)
         d = policy.on_mspt("hello", 0.5, 100.0)
         assert d.reason == "mspt_blocked_alphabet_mode"
+
+    def test_soft_blocked_in_alphabet_mode(self, policy: FusionPolicy):
+        policy.soft_mode = True
+        policy.set_spell_mode(True)
+        policy.set_alphabet_weight(1.0)
+        d = policy.on_mspt("hello", 0.5, 100.0)
+        assert d.reason == "mspt_soft_blocked_alphabet_mode"
+
+    def test_soft_breakthrough_in_alphabet_mode(self, policy: FusionPolicy):
+        policy.soft_mode = True
+        policy.set_auto_mode("alphabet")
+        policy.set_alphabet_weight(0.1)  # low alphabet weight
+        d = policy.on_mspt("hello", 0.95, 100.0)  # high confidence mspt
+        assert d.action == "accept_mspt"
 
     def test_glove_agreement_logged(self, policy: FusionPolicy):
         policy.set_auto_mode("word")
@@ -90,9 +105,17 @@ class TestAlphabetPolicy:
         assert policy.spell_display == "A"
 
     def test_blocked_in_word_mode(self, policy: FusionPolicy):
+        policy.soft_mode = False
         policy.set_auto_mode("word")
         d = policy.on_alphabet("A", 0.9, 100.0)
         assert d.reason == "alphabet_blocked_word_mode"
+
+    def test_soft_blocked_in_word_mode(self, policy: FusionPolicy):
+        policy.soft_mode = True
+        policy.set_auto_mode("word")
+        policy.set_alphabet_weight(0.0)
+        d = policy.on_alphabet("A", 0.9, 100.0)
+        assert d.reason == "alphabet_soft_blocked_word_mode"
 
     def test_low_confidence_ignored(self, policy: FusionPolicy):
         policy.set_spell_mode(True)

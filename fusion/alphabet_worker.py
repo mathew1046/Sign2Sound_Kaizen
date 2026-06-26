@@ -28,6 +28,10 @@ from alphabet_transformer.hand_crop import (  # noqa: E402
     default_cansik_paths,
     extract_frame_landmarks_detailed,
     try_create_cansik_detector,
+    crop_frame,
+    remap_landmarks_to_full_frame,
+    _landmarks_from_results,
+    FrameLandmarks,
 )
 from alphabet_transformer.model import SignTransformer  # noqa: E402
 from alphabet_transformer.paths import DEFAULT_WEIGHTS, HAND_LANDMARKER  # noqa: E402
@@ -83,6 +87,7 @@ class AlphabetWorker:
         self._thread: threading.Thread | None = None
         self._available = False
         self._error: str | None = None
+        self._external_bbox = None
 
     @property
     def available(self) -> bool:
@@ -97,6 +102,7 @@ class AlphabetWorker:
             self._enabled = enabled
             if not enabled:
                 self._crop_bbox = None
+                self._external_bbox = None
 
     def get_crop_bbox(self) -> tuple[int, int, int, int] | None:
         with self._state_lock:
@@ -105,6 +111,10 @@ class AlphabetWorker:
     def submit_frame(self, frame: np.ndarray) -> None:
         with self._frame_lock:
             self._latest_frame = frame.copy()
+
+    def submit_hand_bbox(self, bbox: tuple[int, int, int, int] | None) -> None:
+        with self._state_lock:
+            self._external_bbox = bbox
 
     def start(self) -> bool:
         self._thread = threading.Thread(target=self._run, daemon=True, name="alphabet-worker")
@@ -174,13 +184,42 @@ class AlphabetWorker:
                     time.sleep(0.01)
                     continue
 
-                result = extract_frame_landmarks_detailed(
-                    landmarker,
-                    frame,
-                    use_crop=self.use_crop,
-                    detector=detector,
-                    pad_frac=self.crop_pad,
-                )
+                # Check for externally provided bbox first (e.g. from RTMLib)
+                with self._state_lock:
+                    ext_bbox = self._external_bbox
+
+                if ext_bbox is not None:
+                    frame_h, frame_w = frame.shape[:2]
+                    x0, y0, w, h = ext_bbox
+                    # Clamp bounding box boundaries
+                    x0 = max(0, min(x0, frame_w - 1))
+                    y0 = max(0, min(y0, frame_h - 1))
+                    w = max(1, min(w, frame_w - x0))
+                    h = max(1, min(h, frame_h - y0))
+                    crop_rect = (x0, y0, w, h)
+
+                    crop_bgr, crop_rect = crop_frame(frame, crop_rect)
+                    if crop_bgr.size > 0:
+                        input_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+                    else:
+                        input_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        crop_rect = None
+
+                    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=input_rgb)
+                    results = landmarker.detect(mp_image)
+                    landmarks = _landmarks_from_results(results)
+                    if crop_rect is not None:
+                        landmarks = remap_landmarks_to_full_frame(landmarks, crop_rect, (frame_w, frame_h))
+                    result = FrameLandmarks(landmarks=landmarks, crop_bbox=crop_rect)
+                else:
+                    result = extract_frame_landmarks_detailed(
+                        landmarker,
+                        frame,
+                        use_crop=self.use_crop,
+                        detector=detector,
+                        pad_frac=self.crop_pad,
+                    )
+
                 with self._state_lock:
                     self._crop_bbox = result.crop_bbox
 
