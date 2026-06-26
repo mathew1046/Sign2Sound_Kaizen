@@ -34,6 +34,7 @@ def _glove_token(label: str, now: float, **meta) -> SignToken:
 
 class TestMsptPolicy:
     def test_accepts_confident_mspt(self, policy: FusionPolicy):
+        policy.set_auto_mode("word")
         d = policy.on_mspt("hello", 0.5, 100.0)
         assert d.action == "accept_mspt"
         assert d.gloss == "hello"
@@ -42,7 +43,13 @@ class TestMsptPolicy:
         d = policy.on_mspt("uncertain", 0.05, 100.0)
         assert d.action == "ignore"
 
+    def test_blocked_in_alphabet_mode(self, policy: FusionPolicy):
+        policy.set_spell_mode(True)
+        d = policy.on_mspt("hello", 0.5, 100.0)
+        assert d.reason == "mspt_blocked_alphabet_mode"
+
     def test_glove_agreement_logged(self, policy: FusionPolicy):
+        policy.set_auto_mode("word")
         policy.on_glove(_glove_token("hello", 99.5))
         d = policy.on_mspt("hello", 0.5, 100.0)
         assert d.action == "accept_mspt"
@@ -76,16 +83,24 @@ class TestGlovePolicy:
 
 
 class TestAlphabetPolicy:
-    def test_appends_letter(self, policy: FusionPolicy):
+    def test_appends_letter_in_alphabet_mode(self, policy: FusionPolicy):
+        policy.set_spell_mode(True)
         d = policy.on_alphabet("A", 0.9, 100.0)
         assert d.action == "append_letter"
         assert policy.spell_display == "A"
 
+    def test_blocked_in_word_mode(self, policy: FusionPolicy):
+        policy.set_auto_mode("word")
+        d = policy.on_alphabet("A", 0.9, 100.0)
+        assert d.reason == "alphabet_blocked_word_mode"
+
     def test_low_confidence_ignored(self, policy: FusionPolicy):
+        policy.set_spell_mode(True)
         d = policy.on_alphabet("B", 0.5, 100.0)
         assert d.action == "ignore"
 
     def test_flush_spell_buffer(self, policy: FusionPolicy):
+        policy.set_spell_mode(True)
         policy.on_alphabet("H", 0.9, 100.0)
         policy.on_alphabet("I", 0.9, 101.0)
         d = policy.flush_spell_buffer()

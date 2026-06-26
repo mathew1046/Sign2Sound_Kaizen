@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from fusion.tokens import SignToken
 from fusion.vocabulary import FusionVocabulary
+
+ManualMode = Literal["word", "alphabet"] | None
 
 
 @dataclass
@@ -28,7 +31,9 @@ class FusionPolicy:
     glove_agree_window_sec: float = 1.0
     glove_fallback: bool = False
     glove_fallback_silent_sec: float = 3.0
-    spell_mode: bool = False
+
+    auto_mode: str = "word"
+    manual_mode: ManualMode = None
 
     last_mspt_time: float = 0.0
     last_mspt_gloss: str = ""
@@ -36,12 +41,48 @@ class FusionPolicy:
     spell_buffer: str = ""
     last_spell_activity: float = 0.0
 
-    def toggle_spell_mode(self) -> bool:
-        self.spell_mode = not self.spell_mode
-        return self.spell_mode
+    @property
+    def is_alphabet_mode(self) -> bool:
+        if self.manual_mode is not None:
+            return self.manual_mode == "alphabet"
+        return self.auto_mode == "alphabet"
+
+    @property
+    def is_word_mode(self) -> bool:
+        return not self.is_alphabet_mode
+
+    @property
+    def spell_mode(self) -> bool:
+        return self.is_alphabet_mode
+
+    def set_auto_mode(self, mode: str) -> None:
+        if mode in ("word", "alphabet"):
+            self.auto_mode = mode
+
+    def toggle_manual_mode(self) -> str:
+        """Cycle: auto → force alphabet → force word → auto."""
+        if self.manual_mode is None:
+            self.manual_mode = "alphabet"
+        elif self.manual_mode == "alphabet":
+            self.manual_mode = "word"
+        else:
+            self.manual_mode = None
+        return self.mode_label
+
+    @property
+    def mode_label(self) -> str:
+        if self.manual_mode == "alphabet":
+            return "SPELL (manual)"
+        if self.manual_mode == "word":
+            return "WORD (manual)"
+        return "SPELL" if self.auto_mode == "alphabet" else "WORD"
 
     def set_spell_mode(self, enabled: bool) -> None:
-        self.spell_mode = enabled
+        self.manual_mode = "alphabet" if enabled else "word"
+
+    def toggle_spell_mode(self) -> bool:
+        self.toggle_manual_mode()
+        return self.is_alphabet_mode
 
     def _prune_glove(self, now: float) -> None:
         self.recent_glove = [
@@ -57,6 +98,8 @@ class FusionPolicy:
         return False
 
     def on_mspt(self, gloss: str, confidence: float, now: float) -> FusionDecision:
+        if self.is_alphabet_mode:
+            return FusionDecision("ignore", reason="mspt_blocked_alphabet_mode")
         if not gloss or gloss == "uncertain" or confidence < self.min_mspt_confidence:
             return FusionDecision("ignore", reason="mspt_uncertain")
 
@@ -88,7 +131,7 @@ class FusionPolicy:
         if consecutive < self.glove_consecutive:
             return FusionDecision("ignore", reason="glove_not_stable")
 
-        if self.spell_mode and self.vocab.is_glove_letter(label):
+        if self.is_alphabet_mode and self.vocab.is_glove_letter(label):
             return FusionDecision("ignore", reason="glove_letter_in_spell_mode")
 
         slug = self.vocab.glove_to_mspt_slug(label)
@@ -98,12 +141,11 @@ class FusionPolicy:
         self.recent_glove.append(token)
         self._prune_glove(token.timestamp)
 
-        # Confirm-only: emit only when MSPT recently agreed or fallback enabled
         if slug == self.last_mspt_gloss and (token.timestamp - self.last_mspt_time) <= self.glove_agree_window_sec:
             return FusionDecision("ignore", reason="glove_confirms_mspt_already_emitted")
 
         if self.glove_fallback and slug is not None:
-            if not (self.spell_mode and self.vocab.is_glove_letter(label)):
+            if not (self.is_alphabet_mode and self.vocab.is_glove_letter(label)):
                 silent = token.timestamp - self.last_mspt_time
                 if silent >= self.glove_fallback_silent_sec:
                     return FusionDecision(
@@ -117,15 +159,14 @@ class FusionPolicy:
         return FusionDecision("ignore", reason="glove_confirm_only")
 
     def on_alphabet(self, letter: str, confidence: float, now: float) -> FusionDecision:
+        if self.is_word_mode:
+            return FusionDecision("ignore", reason="alphabet_blocked_word_mode")
         if confidence < self.alphabet_threshold:
             return FusionDecision("ignore", reason="alphabet_low_conf")
         if not letter or len(letter) != 1:
             return FusionDecision("ignore", reason="alphabet_invalid")
 
         self.last_spell_activity = now
-        if not self.spell_mode:
-            self.spell_mode = True
-
         self.spell_buffer += letter.upper()
         return FusionDecision(
             "append_letter",

@@ -26,7 +26,7 @@ sys.path.insert(0, str(ALPHA_ROOT))
 
 from alphabet_transformer.hand_crop import (  # noqa: E402
     default_cansik_paths,
-    extract_frame_landmarks,
+    extract_frame_landmarks_detailed,
     try_create_cansik_detector,
 )
 from alphabet_transformer.model import SignTransformer  # noqa: E402
@@ -52,7 +52,7 @@ def _get_hand_landmarker():
 
 
 class AlphabetWorker:
-    """Consume latest frames and emit alphabet letter tokens."""
+    """Consume latest frames and emit alphabet letter tokens when enabled."""
 
     def __init__(
         self,
@@ -63,6 +63,7 @@ class AlphabetWorker:
         crop_pad: float = 0.15,
         hand_det_confidence: float = 0.2,
         min_interval_sec: float = 0.16,
+        device: str | None = None,
     ):
         self.weights_path = weights_path or DEFAULT_WEIGHTS
         self.confidence_threshold = confidence_threshold
@@ -70,10 +71,14 @@ class AlphabetWorker:
         self.crop_pad = crop_pad
         self.hand_det_confidence = hand_det_confidence
         self.min_interval_sec = min_interval_sec
+        self.device_preference = device
 
         self._queue: queue.Queue[SignToken] = queue.Queue(maxsize=32)
         self._frame_lock = threading.Lock()
+        self._state_lock = threading.Lock()
         self._latest_frame: np.ndarray | None = None
+        self._enabled = False
+        self._crop_bbox: tuple[int, int, int, int] | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._available = False
@@ -86,6 +91,16 @@ class AlphabetWorker:
     @property
     def error(self) -> str | None:
         return self._error
+
+    def set_enabled(self, enabled: bool) -> None:
+        with self._state_lock:
+            self._enabled = enabled
+            if not enabled:
+                self._crop_bbox = None
+
+    def get_crop_bbox(self) -> tuple[int, int, int, int] | None:
+        with self._state_lock:
+            return self._crop_bbox
 
     def submit_frame(self, frame: np.ndarray) -> None:
         with self._frame_lock:
@@ -119,7 +134,10 @@ class AlphabetWorker:
 
     def _run(self) -> None:
         try:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            if self.device_preference:
+                device = torch.device(self.device_preference)
+            else:
+                device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             classes = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
             model = SignTransformer(input_dim=126, num_classes=len(classes)).to(device)
             model.load_state_dict(
@@ -135,12 +153,15 @@ class AlphabetWorker:
                 else None
             )
             self._available = True
-            print("[alphabet] worker ready")
+            print(f"[alphabet] worker ready (device={device})")
 
             frame_queue: deque[np.ndarray] = deque(maxlen=30)
             last_pred_time = 0.0
 
             while not self._stop.is_set():
+                with self._state_lock:
+                    enabled = self._enabled
+
                 frame = None
                 with self._frame_lock:
                     if self._latest_frame is not None:
@@ -149,14 +170,21 @@ class AlphabetWorker:
                     time.sleep(0.01)
                     continue
 
-                landmarks = extract_frame_landmarks(
+                if not enabled:
+                    time.sleep(0.01)
+                    continue
+
+                result = extract_frame_landmarks_detailed(
                     landmarker,
                     frame,
                     use_crop=self.use_crop,
                     detector=detector,
                     pad_frac=self.crop_pad,
                 )
-                frame_queue.append(landmarks)
+                with self._state_lock:
+                    self._crop_bbox = result.crop_bbox
+
+                frame_queue.append(result.landmarks)
 
                 now = time.time()
                 if len(frame_queue) == 30 and (now - last_pred_time) >= self.min_interval_sec:
@@ -180,6 +208,7 @@ class AlphabetWorker:
                             source="alphabet",
                             confidence=confidence,
                             timestamp=now,
+                            meta={"crop_bbox": result.crop_bbox},
                         )
                         try:
                             self._queue.put_nowait(token)
