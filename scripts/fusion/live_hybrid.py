@@ -4,11 +4,12 @@
 Usage:
   cd ~/Arrakis/Sign2Sound_Kaizen
   export PYTHONPATH=$PWD:$PWD/scripts/mspt
+  adb forward tcp:8090 tcp:8080
   python scripts/fusion/live_hybrid.py \\
-    --video-url http://localhost:8080/video \\
+    --video-url http://localhost:8090/video \\
     --checkpoint checkpoints/mspt/mspt_rtmlib_263_best.pt
 
-Keys: q quit | f flush composer | s toggle spell mode | Space flush spell buffer
+Keys: q quit | f flush composer | s cycle mode (auto / spell / word) | Space flush spell buffer
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ sys.path.insert(0, str(SCRIPTS_MSPT))
 sys.path.insert(0, str(REPO_ROOT))
 
 from fusion.alphabet_worker import AlphabetWorker  # noqa: E402
+from fusion.mode_detector import ModeDetector, ModeDetectorConfig  # noqa: E402
 from fusion.policy import FusionPolicy  # noqa: E402
 from fusion.vocabulary import FusionVocabulary  # noqa: E402
 from mspt.gloss_compose import GlossComposer, ensure_project_env, gemini_available  # noqa: E402
@@ -71,17 +73,16 @@ def _apply_decision(
             tts.speak_text(decision.gloss)
 
 
-def draw_fusion_status(frame, policy: FusionPolicy) -> None:
+def draw_fusion_status(frame, policy: FusionPolicy, mode_debug: dict | None = None) -> None:
     h, _ = frame.shape[:2]
     y = int(h * 0.30)
-    mode = "SPELL" if policy.spell_mode else "WORD"
     cv2.putText(
         frame,
-        f"Mode: {mode}",
+        f"Mode: {policy.mode_label}",
         (16, y),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.75,
-        (255, 180, 80),
+        (255, 180, 80) if policy.is_alphabet_mode else (80, 200, 255),
         2,
         cv2.LINE_AA,
     )
@@ -96,6 +97,35 @@ def draw_fusion_status(frame, policy: FusionPolicy) -> None:
             2,
             cv2.LINE_AA,
         )
+    if mode_debug is not None:
+        dbg = (
+            f"h={mode_debug.get('hand_motion_ema', 0):.4f} "
+            f"b={mode_debug.get('body_motion_ema', 0):.4f}"
+        )
+        cv2.putText(
+            frame, dbg, (16, y + 64),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 180, 180), 1, cv2.LINE_AA,
+        )
+
+
+def draw_hand_crop_bbox(
+    frame: np.ndarray,
+    bbox: tuple[int, int, int, int] | None,
+) -> None:
+    if bbox is None:
+        return
+    x0, y0, w, h = bbox
+    cv2.rectangle(frame, (x0, y0), (x0 + w, y0 + h), (0, 255, 180), 2)
+    cv2.putText(
+        frame,
+        "hand crop",
+        (x0, max(20, y0 - 8)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.6,
+        (0, 255, 180),
+        2,
+        cv2.LINE_AA,
+    )
 
 
 def run_live(args: argparse.Namespace) -> None:
@@ -147,7 +177,17 @@ def run_live(args: argparse.Namespace) -> None:
         glove_consecutive=args.glove_consecutive,
         glove_fallback=args.glove_fallback,
         glove_fallback_silent_sec=args.glove_fallback_silent_sec,
-        spell_mode=args.spell_mode,
+        manual_mode="alphabet" if args.spell_mode else None,
+    )
+
+    mode_detector = ModeDetector(
+        ModeDetectorConfig(
+            hand_motion_min=args.mode_hand_min,
+            body_spell_max=args.mode_body_spell_max,
+            body_word_min=args.mode_body_word_min,
+            hand_body_ratio_min=args.mode_hand_body_ratio,
+            switch_frames=args.mode_switch_frames,
+        )
     )
 
     glove = None
@@ -155,17 +195,18 @@ def run_live(args: argparse.Namespace) -> None:
         from fusion.glove_worker import GloveWorker  # noqa: WPS433
 
         glove = GloveWorker(
-            port=args.glove_port,
+            tcp_port=args.glove_tcp_port,
             margin_threshold=args.glove_margin,
             activity_threshold=args.glove_activity,
             consecutive_required=args.glove_consecutive,
+            connect_timeout_sec=args.glove_connect_timeout,
         )
         if not glove.start():
             print(f"[hybrid] glove unavailable ({glove.error}); continuing without glove")
             glove.close()
             glove = None
         else:
-            print(f"[hybrid] glove enabled on {args.glove_port} (confirm-only)")
+            print(f"[hybrid] glove enabled on TCP port {args.glove_tcp_port} (confirm-only)")
 
     alphabet: AlphabetWorker | None = None
     if not args.no_alphabet:
@@ -175,6 +216,7 @@ def run_live(args: argparse.Namespace) -> None:
             use_crop=args.crop,
             crop_pad=args.crop_pad,
             hand_det_confidence=args.hand_det_confidence,
+            device=args.alphabet_device,
         )
         if not alphabet.start():
             print(f"[hybrid] alphabet unavailable ({alphabet.error}); continuing without alphabet")
@@ -261,6 +303,7 @@ def run_live(args: argparse.Namespace) -> None:
 
             if alphabet is not None:
                 alphabet.submit_frame(frame)
+                alphabet.set_enabled(policy.is_alphabet_mode)
 
             if glove is not None:
                 for token in glove.poll():
@@ -287,6 +330,9 @@ def run_live(args: argparse.Namespace) -> None:
 
                 hands, body, face = mspt_live.wholebody_to_viz(wb)
                 last_hands, last_body, last_face = hands, body, face
+                detected_mode = mode_detector.update(hands, body)
+                if policy.manual_mode is None:
+                    policy.set_auto_mode(detected_mode)
                 cached_skel = mspt_live.render_skeleton_panel(
                     last_hands, last_body, last_face, panel_size=args.skeleton_panel_size,
                 )
@@ -299,7 +345,7 @@ def run_live(args: argparse.Namespace) -> None:
 
                 events = segmenter.update(wb, last_motion, now)
                 for ev in events:
-                    if ev.kind == "end" and ev.buffer:
+                    if ev.kind == "end" and ev.buffer and policy.is_word_mode:
                         last_preds = mspt_live.predict_clip(
                             model, ev.buffer, args.max_seq_len, device, idx_to_label, args.top_k,
                             min_confidence=args.min_confidence,
@@ -350,7 +396,9 @@ def run_live(args: argparse.Namespace) -> None:
                 recording=recording_ui,
             )
             mspt_live.draw_composer_status(display, composer)
-            draw_fusion_status(display, policy)
+            draw_fusion_status(display, policy, mode_detector.debug)
+            if policy.is_alphabet_mode and alphabet is not None:
+                draw_hand_crop_bbox(display, alphabet.get_crop_bbox())
             if cached_skel is not None:
                 mspt_live.composite_bottom_left(display, cached_skel, margin=args.skeleton_margin)
             cv2.imshow(args.window, display)
@@ -367,8 +415,8 @@ def run_live(args: argparse.Namespace) -> None:
             if composer is not None and key == flush_key:
                 composer.flush()
             if key == ord("s"):
-                enabled = policy.toggle_spell_mode()
-                print(f"[hybrid] spell mode {'ON' if enabled else 'OFF'}")
+                label = policy.toggle_manual_mode()
+                print(f"[hybrid] mode → {label}")
             if key == ord(" "):
                 decision = policy.flush_spell_buffer()
                 _apply_decision(decision, composer=composer, tts=tts, now=time.time())
@@ -425,7 +473,9 @@ def main() -> int:
     ap.add_argument("--flush-key", default=mspt_live.DEFAULT_FLUSH_KEY)
 
     ap.add_argument("--no-glove", action="store_true")
-    ap.add_argument("--glove-port", default="/dev/ttyUSB0")
+    ap.add_argument("--glove-tcp-port", type=int, default=8080,
+                    help="TCP port for glove Wi-Fi stream (default 8080)")
+    ap.add_argument("--glove-connect-timeout", type=float, default=15.0)
     ap.add_argument("--glove-fallback", action="store_true",
                     help="Allow glove-only overlap words when MSPT silent")
     ap.add_argument("--glove-fallback-silent-sec", type=float, default=3.0)
@@ -437,10 +487,23 @@ def main() -> int:
     ap.add_argument("--alphabet-weights", type=str,
                     default=str(REPO_ROOT / "alphabet_transformer" / "weights" / "sign_transformer_alphabet.pth"))
     ap.add_argument("--alphabet-confidence", type=float, default=0.85)
-    ap.add_argument("--spell-mode", action="store_true", help="Start in spell mode")
+    ap.add_argument("--alphabet-device", default="cpu",
+                    help="PyTorch device for alphabet model (cpu avoids GPU OOM with MSPT)")
+    ap.add_argument("--spell-mode", action="store_true", help="Start in manual spell mode")
     ap.add_argument("--crop", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--crop-pad", type=float, default=0.15)
     ap.add_argument("--hand-det-confidence", type=float, default=0.2)
+
+    ap.add_argument("--mode-hand-min", type=float, default=0.003,
+                    help="Min hand motion EMA to consider alphabet mode")
+    ap.add_argument("--mode-body-spell-max", type=float, default=0.008,
+                    help="Max body motion EMA for alphabet mode")
+    ap.add_argument("--mode-body-word-min", type=float, default=0.014,
+                    help="Body motion EMA that forces word mode")
+    ap.add_argument("--mode-hand-body-ratio", type=float, default=2.5,
+                    help="Hand/body motion ratio favoring alphabet mode")
+    ap.add_argument("--mode-switch-frames", type=int, default=6,
+                    help="Consecutive frames before mode switches")
 
     add_segmenter_args(ap)
     run_live(ap.parse_args())

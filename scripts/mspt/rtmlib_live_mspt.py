@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Live rtmlib GPU + MSPT from an HTTP video feed (e.g. localhost:8080/video).
+"""Live rtmlib GPU + MSPT from an HTTP video feed (e.g. localhost:8090/video).
 
 Smooth preview (async frame grab + pose worker), large prediction overlay,
 rtmlib COCO-WholeBody skeleton panel bottom-left. Clip-based inference like
@@ -12,13 +12,14 @@ is set; otherwise rules + join fallback. Press ``f`` to force-flush the buffer.
 Usage:
   cd ~/Arrakis/Sign2Sound_Kaizen
   export PYTHONPATH=$PWD:$PWD/scripts/mspt
+  adb forward tcp:8090 tcp:8080
   python scripts/mspt/rtmlib_live_mspt.py \\
-    --video-url http://localhost:8080/video \\
+    --video-url http://localhost:8090/video \\
     --checkpoint checkpoints/mspt/mspt_rtmlib_263_best.pt \\
     --lab-root data/include50_rtmlib_1080
 
   # Per-gloss TTS (legacy):
-  python scripts/mspt/rtmlib_live_mspt.py --no-compose --video-url http://localhost:8080/video
+  python scripts/mspt/rtmlib_live_mspt.py --no-compose --video-url http://localhost:8090/video
 """
 
 from __future__ import annotations
@@ -67,7 +68,7 @@ from mspt.segmentation import (  # noqa: E402
 )
 from mspt.skeleton_viz import composite_bottom_left, render_skeleton_panel  # noqa: E402
 
-DEFAULT_VIDEO_URL = "http://localhost:8080/video"
+DEFAULT_VIDEO_URL = "http://localhost:8090/video"
 DEFAULT_LAB = RTMLIB_LAB
 DEFAULT_CKPT = MSPT_CHECKPOINTS / "mspt_rtmlib_263_best.pt"
 DEFAULT_CLIP_SEC = 2.5

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -22,6 +23,14 @@ CANSIK_WEIGHTS_URL = (
 )
 
 _warned_missing_weights = False
+
+
+@dataclass
+class FrameLandmarks:
+    """Landmarks in full-frame normalized coords plus optional crop bbox (x0, y0, w, h)."""
+
+    landmarks: np.ndarray
+    crop_bbox: tuple[int, int, int, int] | None = None
 
 
 def default_cansik_paths() -> tuple[Path, Path]:
@@ -101,8 +110,8 @@ def detect_on_frame(
     use_crop: bool = True,
     detector: CansikHandDetector | None = None,
     pad_frac: float = 0.15,
-) -> np.ndarray:
-    """Run MediaPipe on crop (if detector finds hands) else full frame; return (42, 3)."""
+) -> FrameLandmarks:
+    """Run MediaPipe on crop (if detector finds hands) else full frame."""
     frame_h, frame_w = frame_bgr.shape[:2]
     frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
 
@@ -116,6 +125,8 @@ def detect_on_frame(
             crop_bgr, crop_rect = crop_frame(frame_bgr, crop_rect)
             if crop_bgr.size > 0:
                 input_rgb = cv2.cvtColor(crop_bgr, cv2.COLOR_BGR2RGB)
+            else:
+                crop_rect = None
 
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=input_rgb)
     results = landmarker.detect(mp_image)
@@ -123,7 +134,7 @@ def detect_on_frame(
 
     if crop_rect is not None:
         landmarks = remap_landmarks_to_full_frame(landmarks, crop_rect, (frame_w, frame_h))
-    return landmarks
+    return FrameLandmarks(landmarks=landmarks, crop_bbox=crop_rect)
 
 
 def try_create_cansik_detector(
@@ -154,6 +165,20 @@ def extract_frame_landmarks(
     pad_frac: float = 0.15,
 ) -> np.ndarray:
     """Public API: cropped or full-frame landmark extraction -> (42, 3)."""
+    return extract_frame_landmarks_detailed(
+        landmarker, frame_bgr, use_crop=use_crop, detector=detector, pad_frac=pad_frac
+    ).landmarks
+
+
+def extract_frame_landmarks_detailed(
+    landmarker,
+    frame_bgr: np.ndarray,
+    *,
+    use_crop: bool = True,
+    detector: CansikHandDetector | None = None,
+    pad_frac: float = 0.15,
+) -> FrameLandmarks:
+    """Like extract_frame_landmarks but includes crop bbox metadata."""
     return detect_on_frame(
         landmarker,
         frame_bgr,
