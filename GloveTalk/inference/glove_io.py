@@ -8,9 +8,86 @@ from __future__ import annotations
 
 import socket
 import threading
+import queue
 
 NUM_RAW_FEATURES = 18
 DEFAULT_GLOVE_TCP_PORT = 8080
+
+
+class TCPLineReceiver:
+    """Accept one hardware TCP client at a time and queue incoming lines."""
+
+    def __init__(self, host: str = "0.0.0.0", port: int = DEFAULT_GLOVE_TCP_PORT):
+        self.host = host
+        self.port = port
+        self.lines: queue.Queue[str] = queue.Queue(maxsize=5000)
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    def close(self) -> None:
+        self.stop()
+
+    def readline(self, timeout: float = 0.1) -> str | None:
+        try:
+            return self.lines.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def reset_input_buffer(self) -> None:
+        while True:
+            try:
+                self.lines.get_nowait()
+            except queue.Empty:
+                return
+
+    def _serve(self) -> None:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind((self.host, self.port))
+            server.listen(1)
+            server.settimeout(0.5)
+            print(f"Hardware input listening on {self.host}:{self.port}")
+
+            while not self._stop.is_set():
+                try:
+                    conn, addr = server.accept()
+                except socket.timeout:
+                    continue
+
+                print(f"Hardware connected from {addr[0]}:{addr[1]}")
+                self.reset_input_buffer()
+                with conn:
+                    conn.settimeout(0.5)
+                    pending = b""
+                    while not self._stop.is_set():
+                        try:
+                            chunk = conn.recv(4096)
+                        except socket.timeout:
+                            continue
+                        except OSError:
+                            break
+                        if not chunk:
+                            break
+
+                        pending += chunk
+                        while b"\n" in pending:
+                            raw_line, pending = pending.split(b"\n", 1)
+                            line = raw_line.decode("utf-8", errors="ignore").strip()
+                            if not line:
+                                continue
+                            try:
+                                self.lines.put_nowait(line)
+                            except queue.Full:
+                                self.reset_input_buffer()
+                                self.lines.put_nowait(line)
+
+                print("Hardware disconnected; waiting for reconnect...")
 
 
 class TCPSerial:

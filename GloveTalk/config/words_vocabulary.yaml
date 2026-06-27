@@ -1,14 +1,9 @@
-# Custom 11-sign vocabulary (includes rest baseline)
-num_classes: 11
+# Custom 6-sign word vocabulary.
+num_classes: 6
 words:
-  - b
-  - big_large
   - good morning
-  - happy
   - hello
-  - house
   - i
-  - o
-  - rest
+  - happy
   - teacher
   - thank you

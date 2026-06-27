@@ -6,56 +6,48 @@ import threading
 import time
 from pathlib import Path
 
-import serial
-
-BAUD_RATE = 115200
-GLOVE_SERIAL_PORT = "/dev/ttyUSB0"
-
-
-def parse_line(line):
-    try:
-        line = line.strip()
-        if not line or "|" not in line:
-            return None
-        parts = line.split('|')
-        if len(parts) < 2:
-            return None
-        l_data = parts[0].strip().split(',')[1:]   # skip 'L' label
-        r_data = parts[1].strip().split(',')[1:]   # skip 'R' label
-        values = [float(x) for x in l_data] + [float(x) for x in r_data]
-        if len(values) != 18:                      # sanity check
-            return None
-        return values
-    except Exception:
-        return None
-
-
-def open_glove_serial():
-    """Open ttyUSB0 once for the session. ttyUSB1 is charging-only."""
-    print(f"🔌 Opening glove port {GLOVE_SERIAL_PORT}...")
-    try:
-        ser = serial.Serial(GLOVE_SERIAL_PORT, BAUD_RATE, timeout=0.5)
-    except (serial.SerialException, OSError) as exc:
-        print(f"Cannot open {GLOVE_SERIAL_PORT}: {exc}")
-        return None
-    time.sleep(0.5)
-    ser.reset_input_buffer()
-    print(f"✅ Connected to {GLOVE_SERIAL_PORT} (locked for this session)")
-    return ser
 
 # --- CONFIGURATION ---
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from inference.glove_io import DEFAULT_GLOVE_TCP_PORT, TCPLineReceiver, parse_glove_line
+
 CSV_FILENAME = str(ROOT / "data" / "raw" / "sign_language_dataset.csv")
 CALIBRATION_FILE = str(ROOT / "sensor_calibration.json")
+TCP_HOST = "0.0.0.0"
+TCP_PORT = DEFAULT_GLOVE_TCP_PORT
+
+
+def parse_line(line):
+    return parse_glove_line(line)
+
+
+def open_glove_receiver():
+    """Start the same TCP glove receiver used by live_translator.py."""
+    print(f"Starting Wi-Fi glove receiver on TCP port {TCP_PORT}...")
+    try:
+        receiver = TCPLineReceiver(host=TCP_HOST, port=TCP_PORT)
+        receiver.start()
+    except OSError as exc:
+        print(f"Cannot listen on TCP port {TCP_PORT}: {exc}")
+        return None
+    time.sleep(0.5)
+    receiver.reset_input_buffer()
+    print(f"Listening for glove frames on {TCP_HOST}:{TCP_PORT}")
+    return receiver
 
 # --- SESSION CONFIG ---
 COLLECTION_TARGETS = [
-    "rest",
-    "big_large",
+    "good morning",
+    "hello",
+    "i",
+    "happy",
+    "teacher",
+    "thank you",
 ]
+RETAKE_DATASET = True
 SAMPLES_PER_LABEL = 10
 FRAMES_PER_SAMPLE = 100
 FRAME_CAPTURE_TIMEOUT_SEC = 10.0
@@ -63,7 +55,7 @@ FRAME_CAPTURE_TIMEOUT_SEC = 10.0
 CALIBRATION_FRAMES = 30
 HARDWARE_TIMEOUT_SEC = 15.0
 
-ser = open_glove_serial()
+ser = open_glove_receiver()
 if not ser:
     print("Exiting...")
     exit()
@@ -79,7 +71,15 @@ HEADERS = [
 print(f"\n📁 FILE SAVE LOCATION: {ABSOLUTE_CSV_PATH}")
 
 # --- FIX 1: Correct header write ---
-if not os.path.exists(CSV_FILENAME) or os.path.getsize(CSV_FILENAME) == 0:
+if RETAKE_DATASET:
+    if os.path.exists(CSV_FILENAME) and os.path.getsize(CSV_FILENAME) > 0:
+        backup_path = f"{CSV_FILENAME}.{time.strftime('%Y%m%d_%H%M%S')}.bak"
+        os.replace(CSV_FILENAME, backup_path)
+        print(f"📦 Previous word dataset backed up to: {backup_path}")
+    with open(CSV_FILENAME, mode='w', newline='') as f:
+        csv.writer(f).writerow(HEADERS)
+    print("📝 Started a fresh word dataset file with headers.")
+elif not os.path.exists(CSV_FILENAME) or os.path.getsize(CSV_FILENAME) == 0:
     with open(CSV_FILENAME, mode='w', newline='') as f:
         csv.writer(f).writerow(HEADERS)
     print("📝 Created new dataset file with headers.")
@@ -92,7 +92,7 @@ def wait_for_hardware(timeout_sec=HARDWARE_TIMEOUT_SEC):
     deadline = time.time() + timeout_sec
     last_raw = ""
     while time.time() < deadline:
-        line = ser.readline().decode('utf-8', errors='ignore')
+        line = ser.readline(timeout=0.5)
         if not line:
             print(".", end="", flush=True)
             continue
@@ -122,7 +122,7 @@ def collect_calibration_frames(step_name, target_count=CALIBRATION_FRAMES, timeo
                 print(f"   Skipped {bad_lines} unparseable line(s).")
             return None
 
-        line = ser.readline().decode('utf-8', errors='ignore')
+        line = ser.readline(timeout=0.5)
         if not line:
             continue
 
@@ -199,13 +199,14 @@ is_recording = False
 raw_frames = []
 last_hardware_signal = time.time()
 
-def record_serial_background():
+def record_glove_background():
     global last_hardware_signal
     while True:
         try:
-            line = ser.readline().decode('utf-8', errors='ignore').strip()
+            line = ser.readline(timeout=0.1)
             if not line:
                 continue
+            line = line.strip()
             last_hardware_signal = time.time()
             if is_recording:
                 parsed = parse_line(line)
@@ -215,7 +216,7 @@ def record_serial_background():
         except Exception:
             pass
 
-listener_thread = threading.Thread(target=record_serial_background, daemon=True)
+listener_thread = threading.Thread(target=record_glove_background, daemon=True)
 listener_thread.start()
 
 

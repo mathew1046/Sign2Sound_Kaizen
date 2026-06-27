@@ -103,7 +103,7 @@ def clean_words() -> pd.DataFrame:
     if unknown:
         dropped = len(df[df["label"].isin(unknown)])
         df = df[df["label"].isin(vocabulary)]
-        print(f"  Dropped {dropped} frames with labels outside the 22-word vocabulary: {unknown}")
+        print(f"  Dropped {dropped} frames with labels outside the {len(vocabulary)}-word vocabulary: {unknown}")
 
     present = sorted(df["label"].unique())
     if set(present) != vocabulary:

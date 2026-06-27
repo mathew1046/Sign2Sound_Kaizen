@@ -9,7 +9,6 @@ Output:
 """
 import argparse
 import json
-import queue
 import socket
 import sys
 import threading
@@ -23,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from inference.feature_utils import GloveFeatureBuffer, load_scaler
-from inference.glove_io import DEFAULT_GLOVE_TCP_PORT, parse_glove_line
+from inference.glove_io import DEFAULT_GLOVE_TCP_PORT, TCPLineReceiver, parse_glove_line
 from paths import FEATURE_CONFIG, WORDS_CLASSES, WORDS_MODEL, WORDS_SCALER
 
 DEFAULT_INPUT_PORT = DEFAULT_GLOVE_TCP_PORT
@@ -37,79 +36,6 @@ CALIBRATION_FILE = ROOT / "sensor_calibration.json"
 
 CONFIDENCE_THRESHOLD = 0.75
 REQUIRED_CONSECUTIVE_MATCHES = 3
-
-
-class TCPLineReceiver:
-    """Accept one hardware TCP client at a time and queue incoming lines."""
-
-    def __init__(self, host: str, port: int):
-        self.host = host
-        self.port = port
-        self.lines: queue.Queue[str] = queue.Queue(maxsize=5000)
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._serve, daemon=True)
-
-    def start(self) -> None:
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._stop.set()
-
-    def readline(self, timeout: float = 0.1) -> str | None:
-        try:
-            return self.lines.get(timeout=timeout)
-        except queue.Empty:
-            return None
-
-    def reset_input_buffer(self) -> None:
-        while True:
-            try:
-                self.lines.get_nowait()
-            except queue.Empty:
-                return
-
-    def _serve(self) -> None:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server.bind((self.host, self.port))
-            server.listen(1)
-            server.settimeout(0.5)
-            print(f"Hardware input listening on {self.host}:{self.port}")
-
-            while not self._stop.is_set():
-                try:
-                    conn, addr = server.accept()
-                except socket.timeout:
-                    continue
-
-                print(f"Hardware connected from {addr[0]}:{addr[1]}")
-                self.reset_input_buffer()
-                with conn:
-                    conn.settimeout(0.5)
-                    pending = b""
-                    while not self._stop.is_set():
-                        try:
-                            chunk = conn.recv(4096)
-                        except socket.timeout:
-                            continue
-                        except OSError:
-                            break
-                        if not chunk:
-                            break
-
-                        pending += chunk
-                        while b"\n" in pending:
-                            raw_line, pending = pending.split(b"\n", 1)
-                            line = raw_line.decode("utf-8", errors="ignore").strip()
-                            if not line:
-                                continue
-                            try:
-                                self.lines.put_nowait(line)
-                            except queue.Full:
-                                self.reset_input_buffer()
-                                self.lines.put_nowait(line)
-
-                print("Hardware disconnected; waiting for reconnect...")
 
 
 class PredictionFeedServer:
