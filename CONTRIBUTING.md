@@ -25,7 +25,7 @@ Open a feature request issue describing the problem you want to solve and your p
 #### Getting Started
 
 ```bash
-git clone https://github.com/anomalyco/Sign2Sound_Kaizen.git
+git clone https://github.com/mathew1046/Sign2Sound_Kaizen.git
 cd Sign2Sound_Kaizen
 pip install -r requirements.txt
 ```
