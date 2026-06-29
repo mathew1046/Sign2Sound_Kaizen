@@ -6,7 +6,7 @@ Thank you for your interest in contributing to GloveTalk! This is an open-source
 
 ### 1. Reporting Issues
 
-Check the [issue tracker](https://github.com/anomalyco/Sign2Sound_Kaizen/issues) first to avoid duplicates. When opening a new issue, include:
+Check the [issue tracker](https://github.com/mathew1046/Sign2Sound_Kaizen/issues) first to avoid duplicates. When opening a new issue, include:
 - A clear title and description
 - Steps to reproduce (for bugs)
 - Relevant logs, screenshots, or error messages
