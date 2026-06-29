@@ -1,5 +1,9 @@
 # 🤟 GloveTalk: AI-Powered Sign Language Translation System
 
+<p align="center">
+  <img src="assets/glovetalk.png" alt="GloveTalk Logo" width="400"/>
+</p>
+
 > **A real-time assistive communication system that translates sign language into speech using Multi-Stream Pose Transformers, Computer Vision, and Embedded Wearable Hardware.**
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
